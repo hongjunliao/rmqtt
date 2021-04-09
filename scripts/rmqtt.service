@@ -1,0 +1,14 @@
+[Unit]
+Description=rmqtt
+After=network.target
+
+[Service]
+LimitCORE=infinity
+ExecStart=/usr/local/bin/rmqtt
+Restart=always
+StartLimitInterval=2
+
+[Install]
+WantedBy=multi-user.target
+Alias=rmqtt.service
+
