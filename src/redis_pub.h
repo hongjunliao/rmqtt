@@ -7,7 +7,7 @@
 #define REDIS_PB_H__
 
 #include "hp/hp_pub.h"
-#include "libim_rcli.h"
+#include "rmqtt_io_t.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,7 +29,7 @@ redisAsyncContext * redis_subc_arg(redisAsyncContext * c, redisAsyncContext * su
 		, hp_sub_cb_t cb
 		, hp_sub_arg_t arg
 		);
-int redis_sub(libim_rcli * client, int n_topic, char * const* topic, uint8_t * qoss);
+int redis_sub(rmqtt_io_t * client, int n_topic, char * const* topic, uint8_t * qoss);
 
 int redis_sup(redisAsyncContext * c
 		, char const * id

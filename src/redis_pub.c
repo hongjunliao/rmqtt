@@ -17,6 +17,14 @@
  * ${topic_prefix}:s:${client_id}
  *
  * */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif /* HAVE_CONFIG_H */
+
+#ifdef _WIN32
+#include "redis/src/Win32_Interop/Win32_Time.h"
+#endif
+
 
 #include <stdio.h>
 #include <limits.h>
@@ -24,17 +32,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include "zlog.h"			/* zlog */
-#include "sds/sds.h"
+#include "hp/sdsinc.h"
+#include "hp/string_util.h" /* hp_vercmp */
 #include "uuid/uuid.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_pub.h"
 #include "hp/hp_config.h"	/* hp_config_t */
+#include "hp/hp_log.h"
 #include "redis_pub.h"
 #include "server.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "redis/src/version.h" /*REDIS_VERSION*/
+#include "server.h"
 
 extern hp_config_t g_conf;
 
@@ -164,7 +172,7 @@ redisAsyncContext * redis_subc(redisAsyncContext * c, redisAsyncContext * subc
 	return redis_subc_arg(c, subc, id, cb, a);
 }
 
-int redis_sub(libim_rcli * client, int n_topic, char * const* topic, uint8_t * qoss)
+int redis_sub(rmqtt_io_t * client, int n_topic, char * const* topic, uint8_t * qoss)
 {
 	if(!(client && client->subc && client->subc->data))
 		return -1;
@@ -185,13 +193,26 @@ int redis_sub(libim_rcli * client, int n_topic, char * const* topic, uint8_t * q
 			sds t = sdsnew(topic[i]);
 
 			cvector_push_back(topics, t);
-			/* save QOS */
-			dictEntry * ent, *existing = 0;
-			ent = dictAddRaw(client->qos, t, &existing);
-			if(!ent)
-				ent = existing;
-			if(ent)
-				dictSetUnsignedIntegerVal(ent, qoss? qoss[i] : s_qoss[2]);
+#ifdef _MSC_VER
+			if(hp_vercmp(REDIS_VERSION, "4.0") < 0){
+				dictEntry * ent, *existing = 0;
+				ent = dictAddRaw(client->qos, t);
+				if (ent) { dictSetUnsignedIntegerVal(ent, (qoss ? qoss[i] : s_qoss[2])); }
+				else{ sdsfree(t); }
+			}
+			else{
+#endif /* _MSC_VER */
+				/* save QOS */
+				dictEntry * ent, *existing = 0;
+				ent = dictAddRaw(client->qos, t, &existing);
+				if (!ent){
+					ent = existing;
+					sdsfree(t);
+				}
+				if (ent) { dictSetUnsignedIntegerVal(ent, (qoss ? qoss[i] : s_qoss[2])); }
+#ifdef _MSC_VER
+			}
+#endif /* _MSC_VER */
 
 			/* NOTE: NOT freed here */
 			/*sdsfree(t);*/
@@ -210,7 +231,7 @@ static void redis_sup_cb(redisAsyncContext *c, void *r, void *privdata)
 
 	if(!(reply && reply->type != REDIS_REPLY_ERROR)){
 
-		zlog_error(zlog_get_category("rmqtt"), "%s: redis HSET failed, err/errstr=%d/'%s'/'%s'\n"
+		hp_log(stderr, "%s: redis HSET failed, err/errstr=%d/'%s'/'%s'\n"
 				, __FUNCTION__, c->err, (reply? reply->str : ""), c->errstr);;
 	}
 }
@@ -245,7 +266,7 @@ int redis_sup(redisAsyncContext * c
 
 	sds topic = internal_TID_gen(g_conf("redis.topic"), id, flags);
 	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_conf("redis.topic"), id);
-	int rc = redisAsyncCommand(c, (done? done : redis_sup_cb), 0/* privdata */, "hset %s %s %s", sid, topic, mid);
+	int rc = redisAsyncCommand(c, (done ? done : redis_sup_cb), 0/* privdata */, "hset %s %s %s", sid, topic, mid);
 	assert(rc == 0);
 
 	sdsfree(sid);
@@ -260,7 +281,7 @@ static void def_cb(redisAsyncContext *c, void *r, void *privdata)
 
 	if(!(reply && reply->type != REDIS_REPLY_ERROR)){
 
-		zlog_error(zlog_get_category("rmqtt"), "%s: redis %s failed, err/errstr=%d/'%s'/'%s'\n"
+		hp_log(stderr, "%s: redis %s failed, err/errstr=%d/'%s'/'%s'\n"
 				, __FUNCTION__, (char *)privdata, c->err, (reply? reply->str : ""), c->errstr);;
 	}
 }
@@ -353,12 +374,27 @@ static void test_sub_only(hp_sub_t * s, char const * topic, sds id, sds msg)
 	}
 	else if(topic[0] == '\0') {
 		fprintf(stdout, "%s: unsubscribed\n", __FUNCTION__);
-		++done;
+		done = -1;
 		return;
 	}
+	++done;
 }
 
-
+static void is_done_1(redisAsyncContext *c, void *r, void *privdata) {
+	redisReply * reply = (redisReply *)r;
+	assert(reply && reply->type != REDIS_REPLY_ERROR);
+	done = 1;
+}
+static void is_done_2(redisAsyncContext *c, void *r, void *privdata) {
+	redisReply * reply = (redisReply *)r;
+	assert(reply && reply->type != REDIS_REPLY_ERROR);
+	done = 1;
+}
+static void is_done_3(redisAsyncContext *c, void *r, void *privdata) {
+	redisReply * reply = (redisReply *)r;
+	assert(reply && reply->type != REDIS_REPLY_ERROR);
+	++done;
+}
 
 int test_redis_pub_main(int argc, char ** argv)
 {
@@ -366,7 +402,6 @@ int test_redis_pub_main(int argc, char ** argv)
 	hp_config_t cfg = g_conf;
 
 	int i, r, rc;
-
 	{
 		int flags = 0;
 		char * topics[] = { "rmqtt:1:865452044887154", "rmqtt:group:all"};
@@ -378,13 +413,7 @@ int test_redis_pub_main(int argc, char ** argv)
 
 	int arg = 10;
 
-	sds s = hp_fread("json/install_apk/6004_2.json");
-	assert(s);
-
-	cJSON * json = cJSON_Parse(s);
-	assert(json);
-
-	id = cjson_sval(json, "data/imei", "");
+	id = "868783048901857";
 
 	/* QOS table. sds string -> QOS int */
 	static dictType qosTableDictType = {
@@ -395,16 +424,15 @@ int test_redis_pub_main(int argc, char ** argv)
 	    dictSdsDestructor,      /* key destructor */
 		NULL                    /* val destructor */
 	};
-	libim_rcli clientobj = { 0 }, * client = &clientobj;
+	rmqtt_io_t clientobj = { 0 }, * client = &clientobj;
 	client->qos = dictCreate(&qosTableDictType, NULL);
+	hp_redis_ev_t s_evobj, *rev = &s_evobj;
+	rev_init(rev); assert(rev);
 
-	uv_loop_t uvloopobj = { 0 }, * uvloop = &uvloopobj;
-
-	r = uv_loop_init(uvloop);
-	assert(r == 0);
-	r = hp_redis_init(&pubc, uvloop, cfg("redis"), cfg("redis.password"), 0);
+	r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
+	pubc->dataCleanup = 0;
 	assert(r == 0 && pubc);
-	r = hp_redis_init(&client->subc, uvloop, cfg("redis"), cfg("redis.password"), 0);
+	r = hp_redis_init(&client->subc, rev, cfg("redis"), cfg("redis.password"), 0);
 	assert(r == 0 && client->subc);
 
 	/* failed: invalid arg */
@@ -436,50 +464,35 @@ int test_redis_pub_main(int argc, char ** argv)
 		assert(rc == 0);
 
 		done = 10;
-		for(; done > 0;--done) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; done > 0;--done) rev_run(rev);
 		done = 0;
 	}
 	/* sup: OK */
 	{
-		void is_done(redisAsyncContext *c, void *r, void *privdata) {
-			redisReply * reply = (redisReply *)r;
-			assert(reply && reply->type != REDIS_REPLY_ERROR);
-			done = 1;
-		}
-		rc = redis_sup(pubc, id, 0, "0", is_done);
+		rc = redis_sup(pubc, id, 0, "0", is_done_1);
 		assert(rc == 0);
 
-		for(; !done;) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; !done;) rev_run(rev);
 		done = 0;
 	}
 	/* OK: pub only, pub 1 */
 	{
-		void is_done(redisAsyncContext *c, void *r, void *privdata) { 
-			redisReply * reply = (redisReply *)r;
-			assert(reply && reply->type != REDIS_REPLY_ERROR);
-			done = 1; 
-		}
-		r = redis_pub(pubc, id, "hello", 5, 0, is_done);
+		r = redis_pub(pubc, id, "hello", 5, 0, is_done_2);
 		assert(r == 0);
 
-		for(; !done;) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; !done;) rev_run(rev);
 
 		done = 0;
 	}
 	/* OK: pub only, pub 2 */
 	{
-		void is_done(redisAsyncContext *c, void *r, void *privdata) { 
-			redisReply * reply = (redisReply *)r;
-			assert(reply && reply->type != REDIS_REPLY_ERROR);
-			++done; 
-		}
-		r = redis_pub(pubc, id, "hello", 5, 0, is_done);
+		r = redis_pub(pubc, id, "hello", 5, 0, is_done_3);
 		assert(r == 0);
 
-		r = redis_pub(pubc, id, "hello", 5, 0, is_done);
+		r = redis_pub(pubc, id, "hello", 5, 0, is_done_3);
 		assert(r == 0);
 
-		for(; done != 2;) uv_run(uvloop, UV_RUN_NOWAIT);
+		for(; done != 2;) rev_run(rev);
 
 		done = 0;
 	}
@@ -491,9 +504,9 @@ int test_redis_pub_main(int argc, char ** argv)
 
 		int unsub = 0;
 		for(i = 0; ;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
-			if(!unsub){
+			if(!unsub && done > 0){
 				r = hp_unsub(client->subc);
 				assert(r == 0);
 
@@ -501,7 +514,7 @@ int test_redis_pub_main(int argc, char ** argv)
 				continue;
 			}
 
-			if(unsub  && done > 0)
+			if(unsub  && done == -1)
 				break;
 		}
 
@@ -519,13 +532,13 @@ int test_redis_pub_main(int argc, char ** argv)
 
 		int unsub = 0;
 		for(i = 0; ;) {
-			uv_run(uvloop, UV_RUN_NOWAIT);
+			rev_run(rev);
 
 			if(i < 1){
 				char uuidstr[64] = "";
 				struct timeval tv;
 				gettimeofday(&tv, NULL);
-				snprintf(uuidstr, sizeof(uuidstr), "%ld", tv.tv_sec * 1000 + tv.tv_usec / 1000);
+				snprintf(uuidstr, sizeof(uuidstr), "%.0f", tv.tv_sec * 1000.0 + tv.tv_usec / 1000);
 
 				msgs[i] =  sdsnew(uuidstr);
 
@@ -556,17 +569,11 @@ int test_redis_pub_main(int argc, char ** argv)
 
 	hp_redis_uninit(pubc);
 	hp_redis_uninit(client->subc);
-	uv_loop_close(uvloop);
-
-	cJSON_Delete(json);
-	sdsfree(s);
+	rev_close(rev);
 
 	dictRelease(client->qos);
+
 	return 0;
 }
 
 #endif /* NDEBUG */
-
-#ifdef __cplusplus
-}
-#endif

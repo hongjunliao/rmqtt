@@ -3,9 +3,23 @@
  * @author hongjun.liao <docici@126.com>, @date 2020/1/9
  *
  * */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif /* HAVE_CONFIG_H */
+
+#ifndef _MSC_VER
+#include <sys/wait.h>
+#else
+#include "redis/src/Win32_Interop/win32fixes.h"
+#include "redis/src/Win32_Interop/Win32_Portability.h"
+#include "redis/src/Win32_Interop/win32_types.h"
+#include "redis/src/Win32_Interop/Win32_FDAPI.h"
+#include "redis/src/Win32_Interop/Win32_QFork.h"
+#endif /* _MSC_VER */
 
 #include <unistd.h>        /* _SC_IOV_MAX */
-#include <sys/wait.h>
+#include <locale.h>
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>	       /* malloc */
 #include <errno.h>         /* errno */
@@ -14,19 +28,15 @@
 #include <assert.h>        /* define NDEBUG to disable assertion */
 #include <stdint.h>
 #include <getopt.h>		/* getopt_long */
-#include <sys/timerfd.h> /* timerfd_create */
 #include "hiredis/hiredis.h"
 #include <hiredis/adapters/libuv.h>
 #include "zlog.h"			/* zlog */
-#include "sds/sds.h"        /* sds */
-#include "sds/sds.h"        /* sds */
-#include "cJSON/cJSON.h"	/* cJSON */
-#include "hp/hp_cjson.h"
 #include "c-vector/cvector.h"	/**/
 #include "inih/ini.h"
+#include "hp/sdsinc.h"        /* sds */
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
-#include "hp/hp_epoll.h"
+#include "hp/hp_io_t.h"
 #include "hp/hp_log.h"
 #include "hp/hp_net.h"
 #include "hp/hp_sig.h"
@@ -35,32 +45,48 @@
 #include "hp/hp_config.h"	/* hp_config_t */
 #include "hp/hp_test.h"    /* hp_test */
 #include "mongoose/mongoose.h"
-#include "libim_rcli.h"
+#include "rmqtt_io_t.h"
+
 #include "gen/git_commit_id.h"	/* GIT_BRANCH_NAME, GIT_COMMIT_ID */
 #include "server.h"
+
 /////////////////////////////////////////////////////////////////////////////////////////
-/* for master/slave */
-static int libim_fd = 0;
+/* the default configure file */
+#ifndef _MSC_VER
+#define  RMQTT_CONF "/etc/rmqtt.conf"
+#define ZLOG_CONF "/etc/zlog.conf"
+#else
+#define  RMQTT_CONF "rmqtt.conf"
+#define ZLOG_CONF "zlog.conf"
+#endif /* _MSC_VER */
+
+/* listen fd */
+static int s_listenfd = 0;
+/* event loop */
+static hp_redis_ev_t s_evobj, * s_ev = &s_evobj;
+
+#ifndef _MSC_VER
+/* for IPC */
 static int n_chlds = 0, is_master = 1;
-static hp_epoll efdsobj = { 0 }, * efds = &efdsobj;
-static uv_loop_t uvloopobj = { 0 }, * uvloop = &uvloopobj;
-
-static pid_t chlds[128] = { 0 };
-static hp_sig ghp_sigobj = { 0 }, * ghp_sig = &ghp_sigobj;
-static int sigchld = 0;
-
 static int n_workers = 16;
-static libim_rctx imclictxobj = { 0 }, * imclictx = &imclictxobj;
+static pid_t chlds[128] = { 0 };
+/* for signal handle */
+static int sigchld = 0;
+static hp_sig ghp_sigobj = { 0 }, *s_sig = &ghp_sigobj;
+
+#endif /* _MSC_VER */
+
+/* rmqtt server */
+static rmqtt_io_ctx s_ioctxobj = { 0 }, * s_ioctx = &s_ioctxobj;
 
 /* HTTP  */
-struct mg_mgr mgrobj, * mgr = &mgrobj;
-struct mg_timer t1obj, t2obj, * t1 = &t1obj, * t2 = &t2obj;
-/* for Redis Pub */
-redisAsyncContext * g_redis = 0;
+struct mg_mgr mgrobj, *mgr = &mgrobj;
+struct mg_timer t1obj, t2obj, *t1 = &t1obj, *t2 = &t2obj;
 
+/* global for Redis */
+redisAsyncContext * g_redis = 0;
+/* global loglevel */
 int gloglevel = 9;
-#define Mq XHMDM_MQ_PKG
-#define Cjson HP_CJSON_PKG
 
 /* config table. char * => char * */
 static dictType configTableDictType = {
@@ -80,54 +106,28 @@ static char const * cfg(char const * id) {
 	return v? (char *)v : "";
 }
 hp_config_t g_conf = cfg;
-
-/////////////////////////////////////////////////////////////////////////////////////////
-/*====================== Hash table type implementation  ==================== */
-int dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
-{
-    int l1,l2;
-    DICT_NOTUSED(privdata);
-
-    l1 = sdslen((sds)key1);
-    l2 = sdslen((sds)key2);
-    if (l1 != l2) return 0;
-    return memcmp(key1, key2, l1) == 0;
-}
-
-/* A case insensitive version used for the command lookup table and other
- * places where case insensitive non binary-safe comparison is needed. */
-int dictSdsKeyCaseCompare(void *privdata, const void *key1,
-        const void *key2)
-{
-    DICT_NOTUSED(privdata);
-
-    return strcasecmp(key1, key2) == 0;
-}
-
-void dictSdsDestructor(void *privdata, void *val)
-{
-    DICT_NOTUSED(privdata);
-
-    sdsfree(val);
-}
-
-uint64_t dictSdsHash(const void *key) {
-    return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
-}
-
+static int s_quit = 0;
 /////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef _MSC_VER
 void on_sigchld(void * arg)
 {
 	++sigchld;
 }
 
+void on_sigexit(void * arg)
+{
+	++s_quit;
+}
+#endif /* _MSC_VER */
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 static redisAsyncContext * redis_get()
 {
+	assert(s_ev);
 	redisAsyncContext * c = 0;
-	int rc = hp_redis_init(&c, uvloop, cfg("redis"), cfg("redis.password"), 0);
+	int rc = hp_redis_init(&c, s_ev, cfg("redis"), cfg("redis.password"), 0);
 	return (rc == 0? c : 0);
 }
 
@@ -175,8 +175,10 @@ static int inih_handler(void* user, const char* section, const char* name,
 		dictAdd(cfg, sdsnew("redis_ip"), sdsnew(redis_ip));
 		dictAdd(cfg, sdsnew("redis_port"), sdsfromlonglong(redis_port));
 	}
-	else if(strcmp(name, "workers") == 0)
+#ifndef _MSC_VER
+	else if (strcmp(name, "workers") == 0)
 		n_workers = atoi(value);
+#endif /* _MSC_VER */
 	else if(strcmp(name, "loglevel") == 0){
 		gloglevel = atoi(value);
 	}
@@ -188,33 +190,19 @@ static int inih_handler(void* user, const char* section, const char* name,
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef _MSC_VER
+
 static int init_chld()
 {
 	int rc;
-
-	/* init epoll */
-	if (hp_epoll_init(efds, 65535) != 0)
-		return -5;
-
 	/* init uv */
-	rc = uv_loop_init(uvloop);
-	if(rc != 0) return -10;
-
+	rev_init(s_ev);
+	if(!s_ev) { return -10; }
 	/* init Redis */
     g_redis = redis_get();
-    if(!g_redis){
-    	return -2;
-	}
-
-	/* init imcli */
-	rc = libim_rctx_init(imclictx, efds, libim_fd, cfgi("tcp-keepalive")
-			, g_redis, redis_get, cfgi("redis.ping"));
-	if(rc != 0){
-		return -3;
-	}
-
-	rc = hp_epoll_add(efds, libim_fd, EPOLLIN, &((libim_ctx *)imclictx)->ed); assert(rc == 0);
-
+    if(!g_redis){ return -2; }
+	rc = rmqtt_io_init(s_ioctx, s_listenfd, cfgi("tcp-keepalive")
+		, g_redis, redis_get, cfgi("redis.ping"));
 	return rc;
 }
 
@@ -236,7 +224,7 @@ static int do_fork()
 		/* reset child's environments */
 		is_master = 0;
 		n_chlds = 0;
-		uv_loop_close(uvloop);
+		rev_close(s_ev);
 
 		mg_timer_free(t1);
 		mg_timer_free(t2);
@@ -294,68 +282,36 @@ static int handle_signal()
 	return 0;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////
-
-static void imcli_try_write()
-{
-	struct list_head * pos, * next;;
-	list_for_each_safe(pos, next, &((libim_ctx *)imclictx)->cli){
-
-		libim_cli* client = (libim_cli *)list_entry(pos, libim_cli, list);
-		assert(client);
-		hp_eto_try_write(&client->eto, &client->epolld);
-		/* DO NOT use client after call of hp_eto_try_write !!!! */
-	}
-
-	list_for_each_safe(pos, next, &((libim_ctx *)imclictx)->cli){
-
-		libim_cli* client = (libim_cli *)list_entry(pos, libim_cli, list);
-		assert(client);
-		assert(client->ctx);
-
-		if(client->ctx->proto.loop)
-			client->ctx->proto.loop(client);
-	}
-}
-
+#endif /* _MSC_VER */
 /////////////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char ** argv)
 {
 	int i, rc;
+	fprintf(stdout, "%s: build at %s %s\n", __FUNCTION__, __DATE__, __TIME__);
+	setlocale(LC_COLLATE, "");
+	srand((unsigned int)time(NULL) ^ getpid());   /* cast (unsigned int) */
 
-	sds conf = sdsnew("/etc/rmqtt.conf");
-	sds zconfs[] = { sdsnew("/etc/zlog.conf"), sdsnew("/etc/rmqtt.zlog") };
-
+	sds conf = sdsnew(RMQTT_CONF);
+	sds zconf = sdsnew(ZLOG_CONF);
+#ifdef LIBHP_WITH_ZLOG
 	/* init log sytstem: zconf */
-	rc = -1;
-	int log_sys = -1;
-
-	for(i = 0; i < 2; ++i){
-		if(access(zconfs[i], F_OK) == 0) {
-			if(log_sys != 0)
-				log_sys = zlog_init(zconfs[i]);
-			else   log_sys = zlog_reload(zconfs[i]);
-
-			rc = dzlog_set_category("rmqtt");
-			if (!(log_sys == 0 && rc == 0)) {
-				fprintf(stderr, "%s: zlog_init('%s') failed\n", __FUNCTION__,
-						zconfs[i]);
-				return -10;
-			}
-		}
+	if (access(zconf, F_OK) == 0) {
+		//if(zlog_init(zconf) != 0) { return -1; }
+		if (dzlog_init(zconf, "rmqtt") != 0 ) { return -1; }
 	}
-	if(rc != 0){
-		fprintf(stderr, "%s: unable to init zlog, none of '%s','%s' can be load\n", __FUNCTION__
-			, zconfs[0], zconfs[1]);
-		return -10;
+	else {
+		fprintf(stderr, "%s: unable to init zlog, '%s' can NOT be load\n", __FUNCTION__, zconf);
+		return -1;
 	}
+
+#endif /* LIBHP_WITH_ZLOG */
 	/* config */
 	config = dictCreate(&configTableDictType, 0);
 
 	if(access(conf, F_OK) == 0) {
 		if (ini_parse(conf, inih_handler, config) < 0) {
-			fprintf(stderr, "%s: ini_parse '%s' \n", __FUNCTION__, conf);
+			hp_log(stderr, "%s: ini_parse '%s' \n", __FUNCTION__, conf);
 			return -3;
 		}
 	}
@@ -374,16 +330,13 @@ int main(int argc, char ** argv)
 		char const * arg = optarg? optarg : "";
 		switch (c) {
 		case 0:{
-			#define is2(s) (strncmp(arg, s, 2) == 0)
-			#define is(s) (arg[0] == s)
-
 			if     (option_index == 0) dictAdd(config, sdsnew("test"), sdsnew(arg));
 			break;
 		}
 		case 'f':
 			if (strlen(arg) > 0){
 				if(ini_parse(arg, inih_handler, config) < 0) {
-					fprintf(stderr, "%s: ini_parse '%s' \n", __FUNCTION__, arg);
+					hp_log(stderr, "%s: ini_parse '%s' \n", __FUNCTION__, arg);
 					return -3;
 				}
 			}
@@ -399,7 +352,7 @@ int main(int argc, char ** argv)
 		}
 			break;
 		case 'V':
-			fprintf(stdout, "%s-%s, build at %s %s\n"
+			hp_log(stdout, "%s-%s, build at %s %s\n"
 					, GIT_BRANCH_NAME, GIT_COMMIT_ID
 					, __DATE__, __TIME__ );
 			return 0;
@@ -408,7 +361,7 @@ int main(int argc, char ** argv)
 			gloglevel = atoi(arg);
 			break;
 		case 'h':
-			fprintf(stdout, "rmqtt - a Redis-based MQTT broker\n"
+			hp_log(stdout, "rmqtt - a Redis-based MQTT broker\n"
 					"Usage: %s -fconf/rmqtt.conf\n"
 					, argv[0]);
 			return 0;
@@ -416,81 +369,82 @@ int main(int argc, char ** argv)
 		}
 	}
 
+#ifndef NDEBUG
+	// test_redis_pub_main(argc, argv);
+//	test_hp_io_t_main(argc, argv);
+#endif
 	/* init HTTP for master */
-	int mg_init(struct mg_mgr * mgr, struct mg_timer * t1, struct mg_timer * t2);
-	if(mg_init(mgr, t1, t2) != 0){
-		return -4;
-	}
-
-	/* init listening port */
-	libim_fd = hp_net_listen(cfgi("mqtt.addr"));
-	assert(libim_fd > 0);
-	if(libim_fd <= 0)
-		return -2;
-
-	/* init uv */
-	rc = uv_loop_init(uvloop);
-	if(rc != 0)
-		return -10;
-
+	if (mg_init(mgr, t1, t2) != 0) { return -4; }
+	/* init event loop */
+	rev_init(s_ev);
+	if (!s_ev) { return -3; }
 	/* init Redis */
 	g_redis = redis_get();
+	if (!g_redis) { return -11; }
+	/* init listening port */
+	s_listenfd = hp_net_listen(cfgi("mqtt.port"));
+	if (s_listenfd <= 0) { return -2; }
+#ifdef _MSC_VER
+	rc = rmqtt_io_init(s_ioctx, s_listenfd, cfgi("tcp-keepalive")
+		, g_redis, redis_get, cfgi("redis.ping"));
+	if (rc != 0) { return -3;}
+#else
+	/* init in child */
+#endif /* _MSC_VER */
 
-	if(hp_sig_init(ghp_sig, on_sigchld, 0, 0, 0, 0) != 0){
-		fprintf(stderr, "%s: hp_sig_init failed\n", __FUNCTION__);
-		return -1;
-	}
+#ifndef _MSC_VER
+	if (hp_sig_init(s_sig, on_sigchld, on_sigexit, 0, 0, 0) != 0) { return -1; }
+#endif /* _MSC_VER */
 
 	hp_log(stdout, "%s: listening on port=%d, waiting for connection ...\n", __FUNCTION__
 			, cfgi("mqtt.port"));
-
 #ifndef NDEBUG
 	char const * test = cfg("test");
 	if(strlen(test) > 0){
 		rc = hp_test(test, argc, argv, 0, 0);
-		/* for redis async */
-		uv_run(uvloop, UV_RUN_ONCE);	
 		return rc;
 	}
 #endif
-
 	/* run */
-	for(;;){
-		if(is_master){
+	for(;!s_quit;){
+#ifndef _MSC_VER
+		if (is_master) {
 			do_fork();
 			handle_signal();
-
 			mg_mgr_poll(mgr, cfgi("hz"));
 		}
 		else {
-			imcli_try_write();
-			hp_epoll_run(efds, cfgi("hz"), (void * )-1);
+			hp_io_run((hp_io_ctx *)s_ioctx, cfgi("hz"), 0);
 		}
-		uv_run(uvloop, UV_RUN_NOWAIT);
+#else
+		mg_mgr_poll(mgr, cfgi("hz"));
+		hp_io_run((hp_io_ctx *)s_ioctx, cfgi("hz"), 0);
+#endif /* _MSC_VER */
+		rev_run(s_ev);
 	}
 
 	/* unit */
+#ifndef _MSC_VER
 	if(!is_master){
-		libim_rctx_uninit(imclictx);
+		rmqtt_io_uninit(s_ioctx);
 	}
-	else{
-		mg_timer_free(t1);
-		mg_timer_free(t2);
-		mg_mgr_free(mgr);
-	}
+#else
+	rmqtt_io_uninit(s_ioctx);
+#endif /* _MSC_VER */
+	mg_timer_free(t1);
+	mg_timer_free(t2);
+	mg_mgr_free(mgr);
 
 	hp_redis_uninit(g_redis);
-	uv_loop_close(uvloop);
-
-	if(!is_master){
-		close(libim_fd);
-		hp_epoll_uninit(efds);
-	}
+	rev_close(s_ev);
 
 	dictRelease(config);
 	sdsfree(conf);
-	for(i = 0; i < 2; ++i)
-		sdsfree(zconfs[i]);
+	sdsfree(zconf);
 
+#ifndef _MSC_VER
+	fprintf(stdout, "%s: %s %s=%d exited\n", __FUNCTION__, argv[0]
+		, (is_master ? "master" : "worker"), getpid());
+#endif /* _MSC_VER */
 	return 0;
 }

@@ -10,25 +10,33 @@
 
 #include <stddef.h>
 #include <string.h>
-#include "sds/sds.h"
+#include "hp/hp_libc.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#ifndef uint8_t
+typedef unsigned char uint8_t;
+#endif
+
+#ifndef uint8_t
+typedef unsigned short uint16_t;
+#endif
+
 /* Describes chunk of memory */
-struct mg_str {
+struct rmqtt_str {
   const char *p; /* Memory chunk pointer */
   size_t len;    /* Memory chunk length */
 };
 
-typedef struct mg_mqtt_message {
+typedef struct r_mqtt_message {
   int cmd;
   int qos;
   int len; /* message length in the IO buffer */
-  struct mg_str topic;
-  struct mg_str payload;
+  struct rmqtt_str topic;
+  struct rmqtt_str payload;
 
   uint8_t connack_ret_code; /* connack */
   uint16_t message_id;      /* puback */
@@ -37,17 +45,13 @@ typedef struct mg_mqtt_message {
   uint8_t protocol_version;
   uint8_t connect_flags;
   uint16_t keep_alive_timer;
-  struct mg_str protocol_name;
-  struct mg_str client_id;
-  struct mg_str will_topic;
-  struct mg_str will_message;
-  struct mg_str user_name;
-  struct mg_str password;
-} mg_mqtt_message;
-
-typedef union libimhdr{
-	struct mg_mqtt_message mqtt;
-} libimhdr;
+  struct rmqtt_str protocol_name;
+  struct rmqtt_str client_id;
+  struct rmqtt_str will_topic;
+  struct rmqtt_str will_message;
+  struct rmqtt_str user_name;
+  struct rmqtt_str password;
+} r_mqtt_message;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // for MQTT protocol

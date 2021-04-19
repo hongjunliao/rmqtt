@@ -5,7 +5,11 @@
 * libim from IM project
 * */
 
-//#include "libim.h"
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif /* HAVE_CONFIG_H */
+
+#include <stdint.h>
 #include <stdio.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -14,7 +18,7 @@
 #include "hp/hp_log.h"
 #include "hp/hp_libc.h"
 #include "protocol.h"
-
+#include "server.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 
 static uint16_t getu16(const char *p) {
@@ -22,7 +26,7 @@ static uint16_t getu16(const char *p) {
   return (up[0] << 8) + up[1];
 }
 
-static const char *scanto(const char *p, struct mg_str *s) {
+static const char *scanto(const char *p, struct rmqtt_str *s) {
   s->len = getu16(p);
   s->p = p + 2;
   return s->p + s->len;
@@ -32,19 +36,19 @@ static const char *scanto(const char *p, struct mg_str *s) {
  * skip unrecognized data and continue read and parse?
  * if NOT set, return as parse error
  *  */
-size_t hp_libim_unpack_mqtt(int magic, char * buf, size_t * nbuf, int flags
-		, libimhdr ** hdrp, char ** bodyp)
+size_t rmqtt_parse(char * buf, size_t * nbuf, int flags
+	, hp_iohdr_t ** iohdrp, char ** bodyp)
 {
 	int rc;
-	if (!(buf && nbuf && hdrp && bodyp))
+	if (!(buf && nbuf && iohdrp && bodyp))
 		return -1;
 
 	rc = -1;
-	*hdrp = (void *) 0;
+	*iohdrp = (void *) 0;
 	*bodyp = (void *) 0;
 
-	libimhdr * hdr = calloc(1, sizeof(libimhdr));
-	mg_mqtt_message * imhdr = &hdr->mqtt;
+	hp_iohdr_t * hdr = calloc(1, sizeof(hp_iohdr_t));
+	r_mqtt_message * imhdr = &hdr->mqtt;
 
 	uint8_t header;
 	uint32_t len, len_len; /* must be 32-bit, see #1055 */
@@ -188,7 +192,7 @@ ret:
 	if(rc <= 0)
 		free(hdr);
 	else{
-		*hdrp = hdr;
+		*iohdrp = hdr;
 	}
 	return rc;
 }

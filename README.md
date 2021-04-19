@@ -1,7 +1,7 @@
 rmqtt - a Redis-based MQTT broker
 =============
 rmqtt use Redis Pub/Sub as the driver, support both QOS 0,1,2
-currenty tested on Linux systems
+mainly test on Linux and Windows system
 
 # compile and run
 * 1.cd to rmqtt root dir

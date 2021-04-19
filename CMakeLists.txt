@@ -7,7 +7,6 @@ CMAKE_POLICY(SET CMP0015 NEW)
 if(NOT CMAKE_BUILD_TYPE)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Options are: None, Debug, Release, RelWithDebInfo, MinSizeRel." FORCE)
 endif()
-
 # -DCMAKE_EXPORT_COMPILE_COMMANDS is for lsp/clangd, see
 # https://clangd.llvm.org/installation.html
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -15,34 +14,45 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # show config
 message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} Options are: Debug|Release")
 
-# rmqtt
+# rmqtt 
 project(rmqtt)
 
+add_subdirectory(deps/libhp)
 # deps
-file(GLOB SRCS0
-	deps/mongoose/mongoose.c
+file(GLOB SRCS
     deps/inih/*.c
+	deps/mongoose/mongoose.c
 )
 # sources
-file(GLOB SRCS0 ${SRCS0} src/* src/gen/git_commit_id.h)
-add_subdirectory(deps/libhp)
-add_executable(rmqtt ${SRCS0} )
+file(GLOB SRCS ${SRCS} src/* src/gen/git_commit_id.h)
+add_executable(rmqtt ${SRCS} )
 target_compile_options(rmqtt PUBLIC
-    -DHAVE_CONFIG_H -D_GNU_SOURCE -O0 -g3 -Wall -DCMAKE_EXPORT_COMPILE_COMMANDS
+    -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
     # for mongoose
     -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING
     # for redis
     -DDICT_BENCHMARK_MAIN
     # for cJSON
     -DcJSON_FREE_PRINT
-	)
-target_include_directories(rmqtt PRIVATE include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ ./)
+)
+if(NOT WIN32)
+	target_compile_options(rmqtt PUBLIC  -O0 -g3  -Wall)
+else()
+	target_compile_options(rmqtt PUBLIC -D_CRT_SECURE_NO_WARNINGS  /MTd)
+endif()
+
+target_include_directories(rmqtt PRIVATE include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ 
+	deps/libhp/deps/redis/deps/ ./)
 
 #add_custom_command(TARGET rmqtt POST_BUILD  COMMAND ${CMAKE_COMMAND} -E echo done _________________________ VERBATIM)
 #add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/src/gen/git_commit_id.h COMMAND ../scripts/prebuild.sh COMMENT "prebuilding ...")
 # hiredis
 #add_subdirectory(deps/hiredis)
 
-target_link_directories(rmqtt PRIVATE lib/)
-target_link_libraries(rmqtt libhp dl m pthread uv zlog uuid curl hiredis z ssl crypto)
-
+target_link_directories(rmqtt PRIVATE lib/ deps/libhp/lib/)
+target_link_libraries(rmqtt libhp dl uv hiredis zlog)
+if(NOT WIN32)
+target_link_libraries(rmqtt libhp dl uv zlog uuid curl  z ssl crypto pthread)
+else()
+target_link_libraries(rmqtt Win32_Interop lua jemalloc redis-server)
+endif()
