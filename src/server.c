@@ -53,7 +53,7 @@
 #include "server.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 /*====================== Hash table type implementation  ==================== */
-int dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
+int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
 {
     int l1,l2;
     DICT_NOTUSED(privdata);
@@ -66,7 +66,7 @@ int dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
 
 /* A case insensitive version used for the command lookup table and other
  * places where case insensitive non binary-safe comparison is needed. */
-int dictSdsKeyCaseCompare(void *privdata, const void *key1,
+static int dictSdsKeyCaseCompare(void *privdata, const void *key1,
         const void *key2)
 {
     DICT_NOTUSED(privdata);
@@ -74,14 +74,14 @@ int dictSdsKeyCaseCompare(void *privdata, const void *key1,
     return strcasecmp(key1, key2) == 0;
 }
 
-void dictSdsDestructor(void *privdata, void *val)
+void r_dictSdsDestructor(void *privdata, void *val)
 {
     DICT_NOTUSED(privdata);
 
     sdsfree(val);
 }
 
-uint64_t dictSdsHash(const void *key) {
+uint64_t r_dictSdsHash(const void *key) {
     return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
 }
 

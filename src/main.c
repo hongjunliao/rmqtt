@@ -90,12 +90,12 @@ int gloglevel = 9;
 
 /* config table. char * => char * */
 static dictType configTableDictType = {
-	dictSdsHash,            /* hash function */
+	r_dictSdsHash,            /* hash function */
     NULL,                   /* key dup */
     NULL,                   /* val dup */
-	dictSdsKeyCompare,      /* key compare */
-    dictSdsDestructor,      /* key destructor */
-	dictSdsDestructor       /* val destructor */
+	r_dictSdsKeyCompare,      /* key compare */
+    r_dictSdsDestructor,      /* key destructor */
+	r_dictSdsDestructor       /* val destructor */
 };
 static dict * config = 0;
 #define cfgi(key) atoi(cfg(key))

@@ -417,11 +417,11 @@ int test_redis_pub_main(int argc, char ** argv)
 
 	/* QOS table. sds string -> QOS int */
 	static dictType qosTableDictType = {
-		dictSdsHash,            /* hash function */
+		r_dictSdsHash,            /* hash function */
 	    NULL,                   /* key dup */
 	    NULL,                   /* val dup */
-		dictSdsKeyCompare,      /* key compare */
-	    dictSdsDestructor,      /* key destructor */
+		r_dictSdsKeyCompare,      /* key compare */
+	    r_dictSdsDestructor,      /* key destructor */
 		NULL                    /* val destructor */
 	};
 	rmqtt_io_t clientobj = { 0 }, * client = &clientobj;

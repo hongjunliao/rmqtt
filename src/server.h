@@ -36,9 +36,9 @@ int rmqtt_dispatch(rmqtt_io_t * ioctx, hp_iohdr_t * iohdr, char * body);
 ///////////////////////////////////////////////////////////////////////////////////////
 
 /* Keys hashing / comparison functions for dict.c hash tables. */
-uint64_t dictSdsHash(const void *key);
-int dictSdsKeyCompare(void *privdata, const void *key1, const void *key2);
-void dictSdsDestructor(void *privdata, void *val);
+uint64_t r_dictSdsHash(const void *key);
+int r_dictSdsKeyCompare(void *privdata, const void *key1, const void *key2);
+void r_dictSdsDestructor(void *privdata, void *val);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
