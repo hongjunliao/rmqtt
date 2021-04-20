@@ -1,0 +1,53 @@
+diff --git a/deps/hiredis/adapters/ae.h b/deps/hiredis/adapters/ae.h
+index 10168fd1..0eb38fd4 100644
+--- a/deps/hiredis/adapters/ae.h
++++ b/deps/hiredis/adapters/ae.h
+@@ -32,7 +32,7 @@
+ #define __HIREDIS_AE_H__
+ #include <sys/types.h>
+ #ifdef _WIN32
+-#include "..\..\src\ae.h"
++#include "../../../src/ae.h"
+ #else
+ #include <ae.h>
+ #endif
+diff --git a/deps/hiredis/async.c b/deps/hiredis/async.c
+index 0a6d367e..06858794 100644
+--- a/deps/hiredis/async.c
++++ b/deps/hiredis/async.c
+@@ -343,6 +343,10 @@ static void __redisAsyncFree(redisAsyncContext *ac) {
+         }
+     }
+ 
++	if (ac->dataCleanup) {
++		ac->dataCleanup(ac->data);
++	}
++
+     /* Cleanup self */
+     redisFree(c);
+ }
+diff --git a/deps/hiredis/async.h b/deps/hiredis/async.h
+index e34dfc45..21937545 100644
+--- a/deps/hiredis/async.h
++++ b/deps/hiredis/async.h
+@@ -68,6 +68,7 @@ typedef struct redisAsyncContext {
+ 
+     /* Not used by hiredis */
+     void *data;
++	void(*dataCleanup)(void *privdata);
+ 
+     /* Event library data and hooks */
+     struct {
+diff --git a/src/redis.c b/src/redis.c
+index 22278d2e..31f4a046 100644
+--- a/src/redis.c
++++ b/src/redis.c
+@@ -3646,7 +3646,7 @@ void redisSetProcTitle(char *title) {
+ #endif
+ }
+ 
+-int main(int argc, char **argv) {
++int win_redis_main(int argc, char **argv) {
+     struct timeval tv;
+ 
+     /* We need to initialize our libraries, and the server configuration. */
