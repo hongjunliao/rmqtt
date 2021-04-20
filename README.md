@@ -1,7 +1,7 @@
 rmqtt - a Redis-based MQTT broker
 =============
 rmqtt use Redis Pub/Sub as the driver, support both QOS 0,1,2
-mainly test on Linux and Windows system
+currenty tested on Linux and Windows systems
 
 # compile and run
 * 1.cd to rmqtt root dir
@@ -18,8 +18,14 @@ see libhp project for more details
 # build debug version, set CMAKE_BUILD_TYPE=Release to a release verison
 cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 .. && make -j 2
 ```
-* 6.edit rmqtt config file rmqtt.conf
-* 7.run it!
+* 6.edit rmqtt config file rmqtt.conf, set redis.shaXXX=(SHA of Redis Lua scripts), e.g. import Lua scripts to Redis :
+```code
+$ redis-cli -h 1921.68.1.105 -p 6379 -a pass script load "$(cat scripts/sub.lua)"
+
+(Redis outputs)
+"93fe15317611aa92adc07b3fc0ef69b50eeb5601"
+```
+* 8.run it!
 ```code
     rmqtt [rmqtt.conf]
 ```
