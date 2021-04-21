@@ -237,8 +237,8 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 		sds topic = sdsnewlen(msg->topic.p, msg->topic.len);
 		void * data = (void *)msg->payload.p;
 		int len = msg->payload.len;
-
-		rc = hp_pub(ioctx->c, topic, data, len, 0);
+		int flags = (strcmp(io->sid, topic) == 0? 0 : 8);
+		rc = redis_pub(ioctx->c, topic, data, len, flags, 0);
 
 		if(msg->qos > 0){
 			uint16_t netbytes;
@@ -252,7 +252,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 
 		if(gloglevel > 0){
 			hp_log(stdout, "%s: <== fd=%d, PUBLISH topic='%s', msgid/QOS=%u/%u, playload=%u/'%s', return=%d\n", __FUNCTION__
-					, ((hp_io_t *)io)->fd, topic, msg->message_id, msg->qos, len, dumpstr(data, len, 64), rc);
+					, ((hp_io_t *)io)->fd, topic, msg->message_id, msg->qos, len, dumpstr(data, len, 8), rc);
 		}
 		sdsfree(topic);
 	}

@@ -56,3 +56,37 @@ target_link_libraries(rmqtt libhp dl uv zlog uuid curl  z ssl crypto pthread)
 else()
 target_link_libraries(rmqtt Win32_Interop lua jemalloc redis-server)
 endif()
+
+##########################################################################################
+# test: pub_file
+project(pub_file)
+# sources
+file(GLOB SRCS test/pub_file/*.c test/README.md)
+add_executable(pub_file ${SRCS} )
+target_compile_options(pub_file PUBLIC
+    -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
+    # for mongoose
+    -DMG_ENABLE_LINES -DMG_ENABLE_DIRECTORY_LISTING
+    # for redis
+    -DDICT_BENCHMARK_MAIN
+    # for cJSON
+    -DcJSON_FREE_PRINT
+)
+if(NOT WIN32)
+	target_compile_options(pub_file PUBLIC  -O0 -g3  -Wall)
+else()
+	target_compile_options(pub_file PUBLIC -D_CRT_SECURE_NO_WARNINGS  /MTd)
+endif()
+
+target_include_directories(pub_file PRIVATE include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ 
+	deps/libhp/deps/redis/deps/ ./)
+
+target_link_directories(pub_file PRIVATE lib/ deps/libhp/lib/)
+target_link_libraries(pub_file libhp dl uv hiredis zlog paho-mqtt3a)
+if(NOT WIN32)
+target_link_libraries(pub_file libhp dl uv zlog uuid curl  z ssl crypto pthread)
+else()
+target_link_libraries(pub_file Win32_Interop lua jemalloc redis-server)
+endif()
+
+##########################################################################################

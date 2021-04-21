@@ -125,7 +125,7 @@ int redis_pub(redisAsyncContext * c, char const * id, char const * msg, int len
 	int rc;
 
 	sds topic = internal_TID_gen(g_conf("redis.topic"), id, flags);
-	rc = hp_pub(c, topic, msg, strlen(msg), done);
+	rc = hp_pub(c, topic, msg, len, done);
 	sdsfree(topic);
 
 	return rc;
