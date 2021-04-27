@@ -8,12 +8,13 @@
 #ifndef RMQTT_IO_T_H
 #define RMQTT_IO_T_H
 
+#include "redis/src/adlist.h" /* list */
+#include "Win32_Interop.h"
+#include "redis/src/dict.h"	  /* dict */
 #include "hp/sdsinc.h"    /* sds */
 #include <hiredis/async.h>
 #include "hp/hp_sock_t.h"   /* hp_sock_t */
 #include "hp/hp_io_t.h"   /* hp_io_ctx */
-#include "redis/src/dict.h"	  /* dict */
-#include "redis/src/adlist.h" /* list */
 
 /////////////////////////////////////////////////////////////////////////////////////////
 

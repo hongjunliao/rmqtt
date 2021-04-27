@@ -9,6 +9,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "redis/src/adlist.h" /* list */
 #include <stdint.h>
 #include <stdio.h>
 #include <stddef.h>

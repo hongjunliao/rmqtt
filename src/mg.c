@@ -8,11 +8,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef _WIN32
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#endif
+#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 
 #include "mongoose/mongoose.h"
 #include "hp/hp_config.h"	/* hp_config_t */
@@ -140,3 +136,5 @@ int mg_init(struct mg_mgr * mgr, struct mg_timer * t1, struct mg_timer * t2) {
 
 	return (nc ? 0 : -1);
 }
+
+#endif /* LIBHP_WITH_WIN32_INTERROP */		

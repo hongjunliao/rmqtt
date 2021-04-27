@@ -8,14 +8,10 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #include <sys/time.h> /*gettimeofday*/
-#else
-#include "deps/redis/src/Win32_Interop/Win32_Portability.h"
-#include "deps/redis/src/Win32_Interop/Win32_Time.h"
-#include "deps/redis/src/Win32_Interop/win32fixes.h"
 #endif /* _MSC_VER */
-
 #include "rmqtt_io_t.h"
 #include <unistd.h>
 #include <time.h>
@@ -29,7 +25,6 @@
 #include "hp/hp_log.h"
 #include "hp/hp_epoll.h"   /* hp_epoll */
 #include "hp/hp_net.h"     /* hp_net_connect */
-#include "hp/hp_cjson.h"
 #include "hp/hp_config.h"	/* hp_config_t */
 #include "hp/str_dump.h"
 #include "protocol.h"
@@ -72,19 +67,17 @@ int rmqtt_io_send_header(rmqtt_io_t * io, uint8_t cmd,
 	} while (len > 0);
 
 	rc = hp_io_write((hp_io_t *)io, buf, vlen - buf, free, 0);
-	assert(rc == 0);
-
 	return rc;
 }
 
-int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
+static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 {
 	int rc;
 	if(!(io && rmsg))
 		return -1;
 
 	rmqtt_io_ctx * ioctx = io->ioctx;
-
+	sds topic = sdsnew(redis_cli_topic(rmsg->topic));
 	int len = sdslen(rmsg->payload);
 
 	uint16_t message_id = ++ioctx->mqid;
@@ -92,7 +85,7 @@ int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 		ioctx->mqid = 0;
 
 	uint16_t netbytes;
-	uint16_t topic_len = sdslen(rmsg->topic);
+	uint16_t topic_len = sdslen(topic);
 
 	size_t total_len = 2 + topic_len + len;
 	if (MG_MQTT_GET_QOS(flags) > 0) {
@@ -103,7 +96,7 @@ int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 
 	netbytes = htons(topic_len);
 	hp_io_write((hp_io_t *)io, &netbytes, 2, (void *)-1, 0);
-	hp_io_write((hp_io_t *)io, (void *)sdsdup(rmsg->topic), topic_len, (hp_io_free_t)sdsfree, 0);
+	rc = hp_io_write((hp_io_t *)io, (void *)(topic), topic_len, (hp_io_free_t)sdsfree, 0);
 
 	if (MG_MQTT_GET_QOS(flags) > 0) {
 		netbytes = htons(message_id);
@@ -111,14 +104,13 @@ int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 	}
 
 	rc = hp_io_write((hp_io_t *)io, (void *)sdsdup(rmsg->payload), len, (hp_io_free_t)sdsfree, 0);
-
 	/* for ACK */
 	io->l_mid = message_id;
 
 	if(gloglevel > 7){
 		int len = sdslen(rmsg->payload);
 		hp_log(stdout, "%s: fd=%d, sending topic='%s', msgid/QOS=%u/%u, playload=%u/'%s'\n", __FUNCTION__
-				, ((hp_io_t *)io)->fd, rmsg->topic, io->l_mid, 2, len, dumpstr(rmsg->payload, len, 64));
+				, ((hp_io_t *)io)->fd, topic, io->l_mid, 2, len, dumpstr(rmsg->payload, len, 64));
 	}
 
 	return rc;
@@ -275,17 +267,6 @@ int rmqtt_io_t_loop(rmqtt_io_t * io)
 					/* resend */
 					rc = rmqtt_io_send(io, rmsg, MG_MQTT_QOS(qos));
 					io->l_time = time(0);
-				}
-				else{
-					hp_log(stderr, "%s: fd=%d, closing unresponsive io='%s' ...\n"
-							, __FUNCTION__, ((hp_io_t *)io)->fd, io->sid);
-#ifndef _MSC_VER
-					/* NOT close(fd) */
-					shutdown(((hp_io_t *)io)->fd, SHUT_WR);
-#else
-					close(((hp_io_t *)io)->fd);
-#endif /* _MSC_VER */
-
 				}
 				goto ret;
 			}

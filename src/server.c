@@ -7,14 +7,13 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
+#include "redis/src/adlist.h" /* list */
+
 #ifndef _MSC_VER
 #include <sys/wait.h>
-#else
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
 #endif /* _MSC_VER */
-
+#include "hp/sdsinc.h"        /* sds */
 #include <stdio.h>
 #include <stdlib.h>	       /* malloc */
 #include <errno.h>         /* errno */
@@ -32,7 +31,6 @@
 #include "zlog.h"			/* zlog */
 #include "c-vector/cvector.h"	/**/
 #include "inih/ini.h"
-#include "hp/sdsinc.h"        /* sds */
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
 #include "hp/hp_io_t.h"
@@ -43,7 +41,6 @@
 #include "hp/hp_redis.h"	/* hp_redis_init */
 #include "hp/hp_config.h"	/* hp_config_t */
 #include "hp/hp_test.h"    /* hp_test */
-#include "hp/hp_libim.h"
 #ifndef _MSC_VER
 #include "mongoose/mongoose.h"
 #endif /* _MSC_VER */
@@ -87,8 +84,10 @@ uint64_t r_dictSdsHash(const void *key) {
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-static void _redisAssert(char *estr, char *file, int line) {
-	assert(0 && "_redisAssert");
+void _redisAssert(char *estr, char *file, int line) {
+	fprintf(stderr, "=== ASSERTION FAILED ===");
+	fprintf(stderr, "==> %s:%d '%s' is not true", file, line, estr);
+	//*((char*)-1) = 'x';
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

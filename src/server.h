@@ -52,16 +52,18 @@ void rmqttc_on_delete(hp_io_t * io);
 /////////////////////////////////////////////////////////////////////////////////////////
 int mg_init(struct mg_mgr * mgr, struct mg_timer * t1, struct mg_timer * t2);
 
+///////////////////////////////////////////////////////////
+void _redisAssert(char *estr, char *file, int line);
 
+/* the default configure file */
 #ifndef _MSC_VER
-#define rev_init(rev) do { if(uv_loop_init(rev) != 0) { rev = 0; } } while(0)
-#define rev_run(rev) do { uv_run(rev, UV_RUN_NOWAIT); } while(0)
-#define rev_close(rev) do { uv_loop_close(rev); } while(0)
+#define  RMQTT_CONF "/etc/rmqtt.conf"
+#define ZLOG_CONF "/etc/zlog.conf"
 #else
-#define rev_init(rev) do { rev = aeCreateEventLoop(1024 * 10);assert(rev); } while(0)
-#define rev_run(rev) do { aeProcessEvents((rev), AE_ALL_EVENTS); } while(0)
-#define rev_close(rev) do { aeDeleteEventLoop(rev); } while(0)
+#define  RMQTT_CONF "rmqtt.conf"
+#define ZLOG_CONF "zlog.conf"
 #endif /* _MSC_VER */
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG

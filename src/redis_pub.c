@@ -21,10 +21,13 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef _WIN32
-#include "redis/src/Win32_Interop/Win32_Time.h"
-#endif
+#include "Win32_Interop.h"
+#include "redis/src/adlist.h" /* list */
 
+#include <time.h>
+#ifndef _MSC_VER
+#include <sys/time.h>
+#endif
 
 #include <stdio.h>
 #include <limits.h>
@@ -34,7 +37,7 @@
 #include "zlog.h"			/* zlog */
 #include "hp/sdsinc.h"
 #include "hp/string_util.h" /* hp_vercmp */
-#include "uuid/uuid.h"
+//#include "uuid/uuid.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_pub.h"
 #include "hp/hp_config.h"	/* hp_config_t */
@@ -182,41 +185,29 @@ int redis_sub(rmqtt_io_t * client, int n_topic, char * const* topic, uint8_t * q
 	sds * topics = 0;
 	cvector_init(topics, 1);
 
+	if (topic && n_topic > 0) {
+		sds t = internal_TID_gen(g_conf("redis.topic"), client->sid, 0);
+		cvector_push_back(topics, t);
+	}
 	/* others */
 	for(i = 0; i < n_topic; ++i){
 		char * key = topic[i];
 		if(!(key && strlen(key) > 0))
 			continue;
 
-		char **val = cvector_lfind(topics, lfind, &key, hp_is_strcmp_equal);
-		if(!val){
-			sds t = sdsnew(topic[i]);
-
-			cvector_push_back(topics, t);
-#ifdef _MSC_VER
-			if(hp_vercmp(REDIS_VERSION, "4.0") < 0){
-				dictEntry * ent, *existing = 0;
-				ent = dictAddRaw(client->qos, t);
-				if (ent) { dictSetUnsignedIntegerVal(ent, (qoss ? qoss[i] : s_qoss[2])); }
-				else{ sdsfree(t); }
-			}
-			else{
-#endif /* _MSC_VER */
-				/* save QOS */
-				dictEntry * ent, *existing = 0;
-				ent = dictAddRaw(client->qos, t, &existing);
-				if (!ent){
-					ent = existing;
-					sdsfree(t);
-				}
-				if (ent) { dictSetUnsignedIntegerVal(ent, (qoss ? qoss[i] : s_qoss[2])); }
-#ifdef _MSC_VER
-			}
-#endif /* _MSC_VER */
-
-			/* NOTE: NOT freed here */
-			/*sdsfree(t);*/
+		sds t = internal_TID_gen(g_conf("redis.topic"), key, 8);
+		cvector_push_back(topics, t);
+		/* save QOS */
+		dictEntry * ent, *existing = 0;
+		ent = dictAddRaw(client->qos, t, &existing);
+		if (!ent) {
+			ent = existing;
+			sdsfree(t);
 		}
+		if (ent) { dictSetUnsignedIntegerVal(ent, (qoss ? qoss[i] : s_qoss[2])); }
+
+		/* NOTE: NOT freed here */
+		/*sdsfree(t);*/
 	}
 
 	rc = hp_sub(client->subc, cvector_size(topics), topics);
@@ -321,6 +312,10 @@ int redis_sub_sremove(redisAsyncContext * c, char const * id, char const * topic
 	return rc;
 }
 
+char const * redis_cli_topic(char const * topic)
+{
+	return internal_get_postfix_from_TID(topic, 0);
+}
 /////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG

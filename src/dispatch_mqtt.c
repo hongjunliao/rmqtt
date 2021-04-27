@@ -8,12 +8,9 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#ifdef _WIN32
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#endif
-
+#include "Win32_Interop.h"
+#include "redis/src/adlist.h" /* list */
+#include "hp/sdsinc.h"     	/* sds */
 #include <unistd.h>
 #include <string.h> 	/* strlen */
 #include <stdio.h>
@@ -23,8 +20,6 @@
 #include <time.h>
 #include <stdlib.h>
 #include "zlog.h"
-#include "redis/src/adlist.h" /* list */
-#include "hp/sdsinc.h"     	/* sds */
 #include "c-vector/cvector.h"
 #include "hp/hp_log.h"     /* hp_log */
 #include "hp/hp_libc.h"    /* hp_min */
@@ -76,28 +71,19 @@ static void sub_cb(hp_sub_t * s, char const * topic, sds id, sds msg)
 
 		return;
 	}
-
 	if(!io) { return; }
 
 	listNode * it = listSearchKey(((rmqtt_io_t *)io)->outlist, id);
-	if(it)
-		return;
+	if(it) { return; }
 
 	if(gloglevel > 0){
 		hp_log(stdout, "%s: Redis message, fd=%d, io='%s', key/value='%s'/'%s'\n", __FUNCTION__
 				, ((hp_io_t *)io)->fd
 				, io->sid, topic
-				, dumpstr(msg, sdslen(msg), 64));
+				, dumpstr(msg, sdslen(msg), 8));
 	}
-
-	/* check if json is an local command */
-//	if(sub_cb_handle_local_comand(topic, id, json, io) == 0)
-//		return;
-
-	if((io)){
-		rc = rmqtt_io_append(io, topic, id, msg, 1);
-		assert(rc == 0);
-	}
+	rc = rmqtt_io_append(io, topic, id, msg, 1);
+	assert(rc == 0);
 
 	return;
 }
@@ -123,11 +109,9 @@ static int libim_mqtt_conack(rmqtt_io_t * io, uint8_t cmd,
 	int rc;
 
 	rc = rmqtt_io_send_header(io, cmd, flags, len);
-	assert(rc == 0);
 
 	uint8_t unused = 0;
 	rc = hp_io_write((hp_io_t *)io, &unused, 1, (void *)-1, 0);
-	assert(rc == 0);
 	rc = hp_io_write((hp_io_t *)io, &return_code, 1, (void *)-1, 0);
 
 	return rc;
@@ -141,8 +125,6 @@ static int libim_mqtt_suback(rmqtt_io_t * io, uint8_t *qoss, size_t qoss_len,
 	uint16_t netbytes;
 	rc = rmqtt_io_send_header(io, MG_MQTT_CMD_SUBACK, 0,
 			2 + qoss_len);
-	assert(rc == 0);
-
 	netbytes = htons(message_id);
 	hp_io_write((hp_io_t *)io, &netbytes, 2, (void *)-1, 0);
 

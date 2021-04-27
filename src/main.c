@@ -7,16 +7,17 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "Win32_Interop.h"
+#include "redis/src/adlist.h" /* list */
 #ifndef _MSC_VER
 #include <sys/wait.h>
-#else
-#include "redis/src/Win32_Interop/win32fixes.h"
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/win32_types.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#include "redis/src/Win32_Interop/Win32_QFork.h"
 #endif /* _MSC_VER */
 
+#ifdef LIBHP_WITH_WIN32_INTERROP
+#include "redis/src/Win32_Interop/Win32_QFork.h"
+#endif /* LIBHP_WITH_WIN32_INTERROP */
+
+#include "hp/sdsinc.h"        /* sds */
 #include <unistd.h>        /* _SC_IOV_MAX */
 #include <locale.h>
 #include <time.h>
@@ -33,7 +34,6 @@
 #include "zlog.h"			/* zlog */
 #include "c-vector/cvector.h"	/**/
 #include "inih/ini.h"
-#include "hp/sdsinc.h"        /* sds */
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
 #include "hp/hp_io_t.h"
@@ -51,14 +51,6 @@
 #include "server.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////
-/* the default configure file */
-#ifndef _MSC_VER
-#define  RMQTT_CONF "/etc/rmqtt.conf"
-#define ZLOG_CONF "/etc/zlog.conf"
-#else
-#define  RMQTT_CONF "rmqtt.conf"
-#define ZLOG_CONF "zlog.conf"
-#endif /* _MSC_VER */
 
 /* listen fd */
 static int s_listenfd = 0;
@@ -80,8 +72,10 @@ static hp_sig ghp_sigobj = { 0 }, *s_sig = &ghp_sigobj;
 static rmqtt_io_ctx s_ioctxobj = { 0 }, * s_ioctx = &s_ioctxobj;
 
 /* HTTP  */
+#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 struct mg_mgr mgrobj, *mgr = &mgrobj;
 struct mg_timer t1obj, t2obj, *t1 = &t1obj, *t2 = &t2obj;
+#endif
 
 /* global for Redis */
 redisAsyncContext * g_redis = 0;
@@ -287,8 +281,16 @@ static int handle_signal()
 
 int main(int argc, char ** argv)
 {
-	int i, rc;
+	int rc;
 	fprintf(stdout, "%s: build at %s %s\n", __FUNCTION__, __DATE__, __TIME__);
+#if (defined _MSC_VER) && (!defined LIBHP_WITH_WIN32_INTERROP)
+	/* init winsock */
+	WSADATA wsd;
+	if (WSAStartup(MAKEWORD(2, 2), &wsd) != 0) {
+		fprintf(stdout, "%s: error WSAStartup, err=%d\n", __FUNCTION__, WSAGetLastError());
+		return 1;
+	}
+#endif /* LIBHP_WITH_WIN32_INTERROP */				
 	setlocale(LC_COLLATE, "");
 	srand((unsigned int)time(NULL) ^ getpid());   /* cast (unsigned int) */
 
@@ -370,11 +372,15 @@ int main(int argc, char ** argv)
 	}
 
 #ifndef NDEBUG
+	//int test_hp_fs_main(int argc, char ** argv);
+	//test_hp_fs_main(argc, argv);
 	// test_redis_pub_main(argc, argv);
 //	test_hp_io_t_main(argc, argv);
 #endif
 	/* init HTTP for master */
+#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 	if (mg_init(mgr, t1, t2) != 0) { return -4; }
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 	/* init event loop */
 	rev_init(s_ev);
 	if (!s_ev) { return -3; }
@@ -417,7 +423,9 @@ int main(int argc, char ** argv)
 			hp_io_run((hp_io_ctx *)s_ioctx, cfgi("hz"), 0);
 		}
 #else
+#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 		mg_mgr_poll(mgr, cfgi("hz"));
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 		hp_io_run((hp_io_ctx *)s_ioctx, cfgi("hz"), 0);
 #endif /* _MSC_VER */
 		rev_run(s_ev);
@@ -431,9 +439,11 @@ int main(int argc, char ** argv)
 #else
 	rmqtt_io_uninit(s_ioctx);
 #endif /* _MSC_VER */
+#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 	mg_timer_free(t1);
 	mg_timer_free(t2);
 	mg_mgr_free(mgr);
+#endif /* LIBHP_WITH_WIN32_INTERROP */
 
 	hp_redis_uninit(g_redis);
 	rev_close(s_ev);

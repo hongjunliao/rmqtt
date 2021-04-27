@@ -49,6 +49,7 @@ int redis_sup_by_topic(redisAsyncContext * c
 int redis_sub_sadd(redisAsyncContext * c, char const * id, char const * topicstr);
 int redis_sub_sremove(redisAsyncContext * c, char const * id, char const * topicstr);
 
+char const * redis_cli_topic(char const * topic);
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG
