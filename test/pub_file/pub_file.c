@@ -7,14 +7,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#if (defined _MSC_VER) && (defined LIBHP_WITH_WIN32_INTERROP)
-#include "redis/src/Win32_Interop/Win32_Portability.h"
-#include "redis/src/Win32_Interop/Win32_FDAPI.h"
-#include "redis/src/Win32_Interop/Win32_ThreadControl.h"
-#else
-#include <windows.h>
-#endif /* _MSC_VER */
-
+#include "Win32_Interop.h"
 #include "hp/sdsinc.h"	/* sds */
 #include <unistd.h>
 #include <assert.h>
@@ -30,11 +23,24 @@
 #include "hp/hp_config.h"   /* hp_config_t */
 #include "hp/hp_libc.h"
 #include "hp/hp_err.h"
+#include "hp/hp_mqtt.h" /* hp_mqtt */
 #include <uv.h> /* uv_fs_open */
 /////////////////////////////////////////////////////////////////////////////////////////
 
+typedef struct pub_file_cli {
+	hp_mqtt base;
+	uv_file f;
+	sds file;
+	uv_req_t dir_req;
+	uv_fs_t open_req;
+	uv_fs_t write_req;
+	uv_buf_t iov[1];
+	int total;
+} pub_file_cli;
+
 /* data for test */
 struct pub_file_test {
+	uv_loop_t * uvloop;
 	sds mqtt_addr, mqtt_user, mqtt_pwd;
 	sds topic;
 	sds file;
@@ -53,7 +59,7 @@ struct pub_file_test {
 	uv_fs_t open_req;
 	uv_fs_t read_req;
 	uv_fs_t write_req;
-	char buffer[1024];
+	sds buffer;
 	uv_buf_t iov;
 };
 
@@ -90,6 +96,32 @@ static void pub_file__message_cb(
 {
 	assert(mqtt);
 	assert(arg);
+	struct pub_file_test * t = arg;
+	pub_file_cli  * mqttcli = (pub_file_cli  *)mqtt;
+
+	if(mqttcli->f <= 0){
+		sds path =  sdscatfmt(sdsempty(), "%s/%s", t->dir, t->topic);
+		uv_fs_mkdir(s_test->uvloop, &mqttcli->dir_req, path, 0, NULL);
+
+		mqttcli->file = sdscatfmt(sdsempty(), "%s/%s", path, mqtt->id);
+		mqttcli->f = uv_fs_open(t->uvloop, &mqttcli->open_req, mqttcli->file, O_CREAT | O_APPEND, 0, NULL);
+		if(mqttcli->f <= 0){
+			s_test->err = -1;
+			strcpy(s_test->errstr, uv_strerror(mqttcli->f));
+		}
+
+		sdsfree(path);
+	}
+	if(mqttcli->f > 0){
+		mqttcli->iov[0] = uv_buf_init(msg, len);
+		uv_fs_write(t->uvloop, &mqttcli->write_req, mqttcli->f, mqttcli->iov, 1, 0, NULL);
+
+		mqttcli->total += len;
+
+		char s1[128] = "";
+		fprintf(stdout, "%s: writing '%s', %s\n", __FUNCTION__, mqttcli->file
+				, byte_to_mb_kb_str_r(mqttcli->total, "%-3.1f %cB", s1));
+	}
 }
 
 static void pub_file__sub_cb(hp_mqtt * mqtt, void * arg)
@@ -114,8 +146,8 @@ static void pub_file__message_cb_2(
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
-/* 
- * file I/O 
+/*
+ * file I/O
  */
 static void on_read(uv_fs_t *req) {
 	assert(req);
@@ -128,46 +160,52 @@ static void on_read(uv_fs_t *req) {
 	else if (req->result == 0) {
 		uv_fs_t close_req;
 		// synchronous
-		uv_fs_close(uv_default_loop(), &close_req, s_test->open_req.result, NULL);
+		uv_fs_close(s_test->uvloop, &close_req, s_test->open_req.result, NULL);
 		s_test->done = 1;
 	}
 	else if (req->result > 0) {
 		//s_test->iov.len = req->result;
-		//uv_fs_write(uv_default_loop(), &s_test->write_req, 1, &s_test->iov, 1, -1, on_write);
+		//uv_fs_write(s_test->uvloop, &s_test->write_req, 1, &s_test->iov, 1, -1, on_write);
 
 		s_test->total += req->result;
 		MQTTAsync_token token;
 		rc = hp_mqtt_pub(s_test->mqttcli, s_test->topic, 2, s_test->iov.base, req->result, &token);
 		if (rc != 0) {
-		pub_failed:
 			s_test->err = -4;
 			uv_fs_t close_req;
 			// synchronous
-			uv_fs_close(uv_default_loop(), &close_req, s_test->open_req.result, NULL);
+			uv_fs_close(s_test->uvloop, &close_req, s_test->open_req.result, NULL);
+			goto ret;
 		}
 		else {
 			for (rc = MQTTASYNC_FAILURE; rc != MQTTASYNC_SUCCESS; ) {
 				rc = MQTTAsync_waitForCompletion(s_test->mqttcli->context, token, 200);
-				if(rc == MQTTASYNC_DISCONNECTED) { goto pub_failed; }
+				if(rc == MQTTASYNC_DISCONNECTED) {
+					s_test->err = -5;
+					uv_fs_t close_req;
+					uv_fs_close(s_test->uvloop, &close_req, s_test->open_req.result, NULL);
+					goto ret;
+				}
 			}
-
-			s_test->iov.len = sizeof(s_test->buffer);
-			uv_fs_read(uv_default_loop(), &s_test->read_req, s_test->open_req.result,
+			s_test->iov.len = 1024 * 16;
+			uv_fs_read(s_test->uvloop, &s_test->read_req, s_test->open_req.result,
 				&s_test->iov, 1, s_test->total, on_read);
 		}
 		char s1[128] = "";
 		fprintf(stdout, "%s: Pub %s\n", __FUNCTION__, byte_to_mb_kb_str_r(s_test->total, "%-3.1f %cB", s1));
 	}
+ret:
+	return;
 }
 
-static void on_open(uv_fs_t *req) 
+static void on_open(uv_fs_t *req)
 {
 	// The request passed to the callback is the same as the one the call setup
 	// function was passed.
 	assert(req == &s_test->open_req);
 	if (req->result >= 0) {
-		s_test->iov = uv_buf_init(s_test->buffer, sizeof(s_test->buffer));
-		uv_fs_read(uv_default_loop(), &s_test->read_req, req->result,
+		s_test->iov = uv_buf_init(s_test->buffer, 1024 * 16);
+		uv_fs_read(s_test->uvloop, &s_test->read_req, req->result,
 			&s_test->iov, 1, -1, on_read);
 	}
 	else {
@@ -183,6 +221,7 @@ int main(int argc, char ** argv)
 	int i, rc;
 
 	struct pub_file_test testobj = {
+		.uvloop = uv_default_loop(),
 		.mqtt_addr = sdsempty(),
 		.file = sdsempty(),
 		.topic = sdsempty(),
@@ -190,11 +229,13 @@ int main(int argc, char ** argv)
 		.mqtt_pwd = sdsempty(),
 		.ids = sdsempty(),
 		.dir = sdsempty(),
+		.buffer = sdsMakeRoomFor(sdsempty(), 1024 * 16),
 	};
 
 	sds txt = 0;
 	char const * txt_sep = "\n";
 	s_test = &testobj;
+	int mode = 0;
 
 	/* parse argc/argv */
 	struct optparse_long longopts[] = {
@@ -226,7 +267,11 @@ int main(int argc, char ** argv)
 		}
 	}
 
-	if (sdslen(s_test->ids) > 0) {
+	mode = ((sdslen(s_test->mqtt_addr) > 0 && sdslen(s_test->topic) > 0
+				&& sdslen(s_test->ids) > 0 && sdslen(s_test->dir) > 0 )? 2 : mode);
+	mode = ((sdslen(s_test->mqtt_addr) > 0 && sdslen(s_test->topic) > 0 && sdslen(s_test->file) > 0 )? 1 : mode);
+
+	if (mode == 2) {
 		if (strncmp(s_test->ids, "file://", 7) == 0)
 			txt = hp_fread(s_test->ids + 7);
 		else {
@@ -241,19 +286,30 @@ int main(int argc, char ** argv)
 			if (sdslen(s[i]) == 0)
 				continue;
 
-			hp_mqtt * mqttcli = (hp_mqtt *)calloc(1, sizeof(hp_mqtt));
-			rc = hp_mqtt_init(mqttcli, s[i]
+			pub_file_cli * mqttcli = (pub_file_cli *)calloc(1, sizeof(pub_file_cli));
+			rc = hp_mqtt_init((hp_mqtt *)mqttcli, s[i]
 				, pub_file__connect_cb, pub_file__message_cb, pub_file__disconnect_cb, 0
 				, s_test->mqtt_addr, s_test->mqtt_user, s_test->mqtt_pwd
 				, 0, s_test, 0);
 			assert(rc == 0);
 
-			rc = hp_mqtt_connect(mqttcli);
+			rc = hp_mqtt_connect((hp_mqtt *)mqttcli);
 			assert(rc == 0);
 		}
 		sdsfreesplitres(s, count);
+
+		for (; !s_test->err && !s_test->done;) {
+			uv_run(s_test->uvloop, UV_RUN_NOWAIT);
+		}
+
+		if(s_test->err){
+			fprintf(stderr, "%s: Sub '%s/%s' failed, err/errstr=%d/'%s'\n", __FUNCTION__
+				, s_test->dir, s_test->topic, s_test->err, s_test->errstr);
+		}
 	}
-	else if (sdslen(s_test->file) > 0) {
+	else if (mode == 1) {
+		uv_fs_t dir_req;
+		uv_fs_mkdir(s_test->uvloop, &dir_req, s_test->dir, 0, NULL);
 
 		s_test->mqttcli = (hp_mqtt *)calloc(1, sizeof(hp_mqtt));
 		rc = hp_mqtt_init(s_test->mqttcli, "pub_file"
@@ -267,9 +323,9 @@ int main(int argc, char ** argv)
 		while (!(s_test->err || s_test->is_conn > 0)) { usleep(200); }
 
 		if(!s_test->err){
-			uv_fs_open(uv_default_loop(), &s_test->open_req, s_test->file, O_RDONLY, 0, on_open);
+			uv_fs_open(s_test->uvloop, &s_test->open_req, s_test->file, O_RDONLY, 0, on_open);
 			for (; !s_test->err && !s_test->done;) {
-				uv_run(uv_default_loop(), UV_RUN_NOWAIT);
+				uv_run(s_test->uvloop, UV_RUN_NOWAIT);
 			}
 
 			uv_fs_req_cleanup(&s_test->open_req);
@@ -279,13 +335,12 @@ int main(int argc, char ** argv)
 
 		hp_mqtt_disconnect(s_test->mqttcli);
 		hp_mqtt_uninit(s_test->mqttcli);
-	}
-	
-	if(s_test->err){
-		fprintf(stderr, "%s: Pub file '%s' failed, err/errstr=%d/'%s'\n", __FUNCTION__
-			, s_test->file, s_test->err, s_test->errstr);
+
+		if(s_test->err){
+			fprintf(stderr, "%s: Pub file '%s' failed, err/errstr=%d/'%s'\n", __FUNCTION__
+				, s_test->file, s_test->err, s_test->errstr);
+		}
 	}
 
 	return s_test->err;
 }
-
