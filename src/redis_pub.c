@@ -238,8 +238,6 @@ int redis_sup_by_topic(redisAsyncContext * c
 
 	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_conf("redis.topic"), id);
 	int rc = redisAsyncCommand(c, (done? done : redis_sup_cb), 0/* privdata */, "hset %s %s %s", sid, topic, mid);
-	assert(rc == 0);
-
 
 	sdsfree(sid);
 	return rc;

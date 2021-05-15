@@ -79,6 +79,11 @@ static void pub_file__connect_cb(hp_mqtt * mqtt, int err, char const * errstr, v
 	assert(arg);
 	struct pub_file_test * t = arg;
 	t->is_conn = hp_max(t->is_conn, 0) + 1;
+
+	char * topics[] = { t->topic };
+	int qoses[] = { 2 };
+	hp_mqtt_sub(mqtt, 1, topics, qoses, 0);
+
 }
 
 static void pub_file__disconnect_cb(hp_mqtt * mqtt, void * arg)
