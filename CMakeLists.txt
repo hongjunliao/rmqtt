@@ -87,10 +87,10 @@ else()
 endif()
 
 target_include_directories(pub_file PRIVATE include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ 
-	deps/libhp/deps/redis/deps/ ./)
+	deps/libhp/deps/redis/deps/ deps/libuv/include/ ./)
 
 target_link_directories(pub_file PRIVATE lib/ deps/libhp/lib/)
-target_link_libraries(pub_file libhp dl zlog paho-mqtt3a)
+target_link_libraries(pub_file libhp dl zlog paho-mqtt3a uv)
 if(NOT WIN32)
 target_link_libraries(pub_file libhp dl uv hiredis uuid curl  z ssl crypto pthread)
 elseif(LIBHP_WITH_WIN32_INTERROP)
