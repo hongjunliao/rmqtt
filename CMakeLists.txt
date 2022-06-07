@@ -43,6 +43,9 @@ endif()
 
 target_include_directories(rmqtt PRIVATE include/ src/ deps/libhp/include/ 
 	deps/libhp/ deps/libhp/deps/ deps/ ./)
+if(MSVC)
+target_include_directories(rmqtt PRIVATE deps/libhp/include/win/)
+endif()
 if(LIBHP_WITH_WIN32_INTERROP)
 target_include_directories(rmqtt PRIVATE deps/libhp/deps/redis/deps/)
 endif()
@@ -87,10 +90,12 @@ else()
 endif()
 
 target_include_directories(pub_file PRIVATE include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ 
-	deps/libhp/deps/redis/deps/ deps/libuv/include/ ./)
-
+	deps/libhp/deps/redis/deps/ ./)
+if(MSVC)
+target_include_directories(pub_file PRIVATE deps/libhp/include/win/)
+endif()
 target_link_directories(pub_file PRIVATE lib/ deps/libhp/lib/)
-target_link_libraries(pub_file libhp dl zlog paho-mqtt3a uv)
+target_link_libraries(pub_file libhp dl zlog paho-mqtt3a)
 if(NOT WIN32)
 target_link_libraries(pub_file libhp dl uv hiredis uuid curl  z ssl crypto pthread)
 elseif(LIBHP_WITH_WIN32_INTERROP)
