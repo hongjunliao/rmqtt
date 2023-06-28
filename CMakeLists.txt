@@ -3,6 +3,7 @@
 
 cmake_minimum_required(VERSION 2.8)
 CMAKE_POLICY(SET CMP0015 NEW)
+configure_file( "config.h.in" "config.h")
 
 if(NOT CMAKE_BUILD_TYPE)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Options are: None, Debug, Release, RelWithDebInfo, MinSizeRel." FORCE)
@@ -14,17 +15,28 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # show config
 message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} Options are: Debug|Release")
 
+##########################################################################################
 # rmqtt 
 project(rmqtt)
 
+set(LIBHP_WITH_MQTT "1" CACHE INTERNAL "LIBHP_WITH_MQTT")
+set(LIBHP_WITH_REDIS "1" CACHE INTERNAL "LIBHP_WITH_REDIS")
 add_subdirectory(deps/libhp)
-# deps
+
+# sources
 file(GLOB SRCS
     deps/inih/*.c
 	deps/mongoose/mongoose.c
 )
-# sources
-file(GLOB SRCS ${SRCS} src/* src/gen/git_commit_id.h)
+file(GLOB SRCS ${SRCS} src/*.c)
+
+if(MSVC)
+	file(GLOB SRCS ${SRCS} src/*.c deps/libc/*.c)
+else()
+#	find_package(PkgConfig REQUIRED)
+#	pkg_check_modules(libiberty REQUIRED libiberty)
+endif()
+
 add_executable(rmqtt ${SRCS} )
 target_compile_options(rmqtt PUBLIC
     -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
@@ -41,8 +53,8 @@ else()
 	target_compile_options(rmqtt PUBLIC -D_CRT_SECURE_NO_WARNINGS  /MTd)
 endif()
 
-target_include_directories(rmqtt PRIVATE include/ src/ deps/libhp/include/ 
-	deps/libhp/ deps/libhp/deps/ deps/ ./)
+target_include_directories(rmqtt PRIVATE "${PROJECT_BINARY_DIR}" include/ src/ deps/libhp/include/ 
+	deps/libhp/ deps/libhp/deps/ deps/)
 if(MSVC)
 target_include_directories(rmqtt PRIVATE deps/libhp/include/win/)
 endif()
@@ -59,15 +71,18 @@ endif()
 #endif()
 
 target_link_directories(rmqtt PRIVATE lib/ deps/libhp/lib/)
-target_link_libraries(rmqtt libhp dl zlog paho-mqtt3a)
+target_link_libraries(rmqtt libhp dl paho-mqtt3a)
 if(NOT WIN32)
-target_link_libraries(rmqtt uv hiredis zlog uuid curl  z ssl crypto pthread)
+	target_link_libraries(rmqtt uv uuid  z ssl crypto pthread)
 elseif(LIBHP_WITH_WIN32_INTERROP)
-target_link_libraries(rmqtt Win32_Interop lua jemalloc redis-server uv_a hiredis)
+	target_link_libraries(rmqtt Win32_Interop lua jemalloc redis-server uv_a)
 else()
-target_link_libraries(rmqtt uv_a libhp  hiredis_static)
+	target_link_libraries(rmqtt uv_a libhp  hiredis_static)
 endif()
 
+if(NOT MSVC)
+#	target_link_libraries(rmqtt libiberty)
+endif()
 ##########################################################################################
 # test: pub_file
 project(pub_file)
@@ -90,16 +105,16 @@ else()
 endif()
 
 target_include_directories(pub_file PRIVATE include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ 
-	deps/libhp/deps/redis/deps/ ./)
+	deps/libhp/deps/redis/deps/ "${PROJECT_BINARY_DIR}")
 if(MSVC)
 target_include_directories(pub_file PRIVATE deps/libhp/include/win/)
 endif()
 target_link_directories(pub_file PRIVATE lib/ deps/libhp/lib/)
-target_link_libraries(pub_file libhp dl zlog paho-mqtt3a)
+target_link_libraries(pub_file libhp dl paho-mqtt3a)
 if(NOT WIN32)
-target_link_libraries(pub_file libhp dl uv hiredis uuid curl  z ssl crypto pthread)
+target_link_libraries(pub_file libhp dl uv uuid z ssl crypto pthread)
 elseif(LIBHP_WITH_WIN32_INTERROP)
-target_link_libraries(pub_file uv_a hiredis Win32_Interop lua jemalloc redis-server)
+target_link_libraries(pub_file uv_a Win32_Interop lua jemalloc redis-server)
 else()
 target_link_libraries(pub_file uv_a libhp  hiredis_static)
 endif()
