@@ -68,7 +68,7 @@ static struct user *getuser(struct mg_http_message *hm, struct user *u) {
 	// In production, make passwords strong and tokens randomly generated
 	// In this example, user list is kept in RAM. In production, it can
 	// be backed by file, database, or some other method.
-	struct user U = { g_conf("mqtt.user"), g_conf("mqtt.pwd"), "admin_token" };
+	struct user const U = { g_conf("mqtt.user"), g_conf("mqtt.pwd"), "admin_token" };
 	char user[256], pass[256];
 	mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
 	if (user[0] != '\0' && pass[0] != '\0') {

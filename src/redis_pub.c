@@ -43,9 +43,7 @@
 #include "hp/hp_config.h"	/* hp_config_t */
 #include "hp/hp_log.h"
 #include "redis_pub.h"
-#include "server.h"
 #include "redis/src/version.h" /*REDIS_VERSION*/
-#include "server.h"
 
 extern hp_config_t g_conf;
 

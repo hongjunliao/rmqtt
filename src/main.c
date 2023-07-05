@@ -46,9 +46,7 @@
 #include "hp/hp_test.h"    /* hp_test */
 #include "mongoose/mongoose.h"
 #include "rmqtt_io_t.h"
-
 #include "gen/git_commit_id.h"	/* GIT_BRANCH_NAME, GIT_COMMIT_ID */
-#include "server.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -101,6 +99,16 @@ static char const * cfg(char const * id) {
 }
 hp_config_t g_conf = cfg;
 static int s_quit = 0;
+
+/* the default configure file */
+#ifndef _MSC_VER
+#define  RMQTT_CONF "/etc/rmqtt.conf"
+#define ZLOG_CONF "/etc/zlog.conf"
+#else
+#define  RMQTT_CONF "rmqtt.conf"
+#define ZLOG_CONF "zlog.conf"
+#endif /* _MSC_VER */
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef _MSC_VER
@@ -116,6 +124,9 @@ void on_sigexit(void * arg)
 #endif /* _MSC_VER */
 
 /////////////////////////////////////////////////////////////////////////////////////////
+extern int mg_init(struct mg_mgr * mgr, struct mg_timer * t1, struct mg_timer * t2);
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 static redisAsyncContext * redis_get()
 {
@@ -123,6 +134,40 @@ static redisAsyncContext * redis_get()
 	redisAsyncContext * c = 0;
 	int rc = hp_redis_init(&c, s_ev, cfg("redis"), cfg("redis.password"), 0);
 	return (rc == 0? c : 0);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/*====================== Hash table type implementation  ==================== */
+int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
+{
+    int l1,l2;
+    DICT_NOTUSED(privdata);
+
+    l1 = sdslen((sds)key1);
+    l2 = sdslen((sds)key2);
+    if (l1 != l2) return 0;
+    return memcmp(key1, key2, l1) == 0;
+}
+
+/* A case insensitive version used for the command lookup table and other
+ * places where case insensitive non binary-safe comparison is needed. */
+static int dictSdsKeyCaseCompare(void *privdata, const void *key1,
+        const void *key2)
+{
+    DICT_NOTUSED(privdata);
+
+    return strcasecmp(key1, key2) == 0;
+}
+
+void r_dictSdsDestructor(void *privdata, void *val)
+{
+    DICT_NOTUSED(privdata);
+
+    sdsfree(val);
+}
+
+uint64_t r_dictSdsHash(const void *key) {
+    return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

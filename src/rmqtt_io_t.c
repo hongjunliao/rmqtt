@@ -29,45 +29,105 @@
 #include "hp/str_dump.h"
 #include "protocol.h"
 #include "redis_pub.h"
-#include "server.h"
 
 extern hp_config_t g_conf;
 extern int gloglevel;
 
+extern size_t rmqtt_parse(char const * buf, size_t * nbuf, int flags
+		, hp_iohdr_t ** iohdrp, char ** bodyp);
+extern int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body);
 /////////////////////////////////////////////////////////////////////////////////////////
-/* callbacks for rmqtt clients */
-static hp_iohdl s_rmqtthdl = {
-	.on_new = rmqttc_on_new,
-	.on_parse = rmqttc_on_parse,
-	.on_dispatch = rmqttc_on_dispatch,
-	.on_loop = rmqttc_on_loop,
-	.on_delete = rmqttc_on_delete,
+
+/**
+*/
+//static void * sdslist_dup(void *ptr)
+//{
+//	libim_msg_t * msg = (libim_msg_t *)ptr;
+//	assert(ptr);
+//
+//	libim_msg_t * ret = calloc(1, sizeof(libim_msg_t));
+//	ret->payload = sdsdup(msg->payload);
+//	ret->mid = sdsdup(msg->mid);
+//	ret->topic = sdsdup(msg->topic);
+////	ret->sid = sdsdup(msg->sid);
+//
+//	return ret;
+//}
+
+static void sdslist_free(void *ptr)
+{
+	rmqtt_rmsg_t * msg = (rmqtt_rmsg_t *)ptr;
+	assert(ptr);
+
+	sdsfree(msg->payload);
+	sdsfree(msg->mid);
+	sdsfree(msg->topic);
+//	sdsfree(msg->sid);
+
+	free(ptr);
+}
+
+static int sdslist_match(void *ptr, void *key)
+{
+	assert(ptr);
+	rmqtt_rmsg_t * msg = (rmqtt_rmsg_t *)ptr;
+	assert(strlen(msg->mid) > 0);
+	assert(strlen((char *)key) > 0);
+
+	return strncmp(msg->mid, (char *)key, sdslen(msg->mid)) == 0;
+}
+
+/* QOS table. sds string -> QOS int */
+static dictType qosTableDictType = {
+	r_dictSdsHash,            /* hash function */
+    NULL,                   /* key dup */
+    NULL,                   /* val dup */
+	r_dictSdsKeyCompare,      /* key compare */
+    r_dictSdsDestructor,      /* key destructor */
+	NULL                    /* val destructor */
 };
 
-/////////////////////////////////////////////////////////////////////////////////////////
-/**
- * MQTT protocol
- * */
-int rmqtt_io_send_header(rmqtt_io_t * io, uint8_t cmd,
-        uint8_t flags, size_t len)
+static int rmqtt_io_t_init(rmqtt_io_t * io, rmqtt_io_ctx * ioctx)
 {
+	if(!(io && ioctx))
+		return -1;
+
+	memset(io, 0, sizeof(rmqtt_io_t));
+
+	io->sid = sdsnew("");
+	io->ioctx = ioctx;
+	io->qos = dictCreate(&qosTableDictType, NULL);
+
+	io->outlist = listCreate();
+//	listSetDupMethod(io->outlist, sdslist_dup);
+	listSetFreeMethod(io->outlist, sdslist_free);
+	listSetMatchMethod(io->outlist, sdslist_match);
+
+	return 0;
+}
+
+
+static void rmqtt_io_t_uninit(rmqtt_io_t * io)
+{
+	if(!io)
+		return ;
+
 	int rc;
-	uint8_t * buf = calloc(1, 1 + sizeof(size_t));
-	uint8_t *vlen = &buf[1];
+	rmqtt_io_ctx * ioctx = io->ioctx;
 
-	buf[0] = (cmd << 4) | flags;
+	sds key = sdscatprintf(sdsempty(), "%s:online", g_conf("redis.topic"));
+	redisAsyncCommand(ioctx->c, 0, 0/* privdata */, "SREM %s %s", key, io->sid);
+	sdsfree(key);
 
-	/* mqtt variable length encoding */
-	do {
-		*vlen = len % 0x80;
-		len /= 0x80;
-		if (len > 0)
-			*vlen |= 0x80;
-		vlen++;
-	} while (len > 0);
+	if(io->subc){
+		rc = hp_unsub(io->subc);
+	}
 
-	rc = hp_io_write((hp_io_t *)io, buf, vlen - buf, free, 0);
-	return rc;
+	dictRelease(io->qos);
+	listRelease(io->outlist);
+	sdsfree(io->sid);
+
+	HP_UNUSED(rc);
 }
 
 static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
@@ -116,118 +176,7 @@ static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 	return rc;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////
-// libim_rcli::qos
-
-/* QOS table. sds string -> QOS int */
-static dictType qosTableDictType = {
-	r_dictSdsHash,            /* hash function */
-    NULL,                   /* key dup */
-    NULL,                   /* val dup */
-	r_dictSdsKeyCompare,      /* key compare */
-    r_dictSdsDestructor,      /* key destructor */
-	NULL                    /* val destructor */
-};
-
-/**
- * libim_rcli::outlist
-*/
-//static void * sdslist_dup(void *ptr)
-//{
-//	libim_msg_t * msg = (libim_msg_t *)ptr;
-//	assert(ptr);
-//
-//	libim_msg_t * ret = calloc(1, sizeof(libim_msg_t));
-//	ret->payload = sdsdup(msg->payload);
-//	ret->mid = sdsdup(msg->mid);
-//	ret->topic = sdsdup(msg->topic);
-////	ret->sid = sdsdup(msg->sid);
-//
-//	return ret;
-//}
-
-static void sdslist_free(void *ptr)
-{
-	rmqtt_rmsg_t * msg = (rmqtt_rmsg_t *)ptr;
-	assert(ptr);
-
-	sdsfree(msg->payload);
-	sdsfree(msg->mid);
-	sdsfree(msg->topic);
-//	sdsfree(msg->sid);
-
-	free(ptr);
-}
-
-static int sdslist_match(void *ptr, void *key)
-{
-	assert(ptr);
-	rmqtt_rmsg_t * msg = (rmqtt_rmsg_t *)ptr;
-	assert(strlen(msg->mid) > 0);
-	assert(strlen((char *)key) > 0);
-
-	return strncmp(msg->mid, (char *)key, sdslen(msg->mid)) == 0;
-}
-
-int rmqtt_io_t_init(rmqtt_io_t * io, rmqtt_io_ctx * ioctx)
-{
-	if(!(io && ioctx))
-		return -1;
-
-	memset(io, 0, sizeof(rmqtt_io_t));
-
-	io->sid = sdsnew("");
-	io->ioctx = ioctx;
-	io->qos = dictCreate(&qosTableDictType, NULL);
-
-	io->outlist = listCreate();
-//	listSetDupMethod(io->outlist, sdslist_dup);
-	listSetFreeMethod(io->outlist, sdslist_free);
-	listSetMatchMethod(io->outlist, sdslist_match);
-
-	return 0;
-}
-
-int rmqtt_io_append(rmqtt_io_t * io, char const * topic, char const * mid, sds message, int flags)
-{
-	if(!(io && message))
-		return -1;
-
-	rmqtt_rmsg_t * jmsg = calloc(1, sizeof(rmqtt_rmsg_t));
-	jmsg->payload = sdsnew(message);
-	jmsg->topic = sdsnew(topic);
-	jmsg->mid = sdsnew(mid);
-
-	list * li = listAddNodeTail(((rmqtt_io_t *)io)->outlist, jmsg);
-	assert(li);
-
-	return 0;
-}
-
-void rmqtt_io_t_uninit(rmqtt_io_t * io)
-{
-	if(!io)
-		return ;
-
-	int rc;
-	rmqtt_io_ctx * ioctx = io->ioctx;
-
-	sds key = sdscatprintf(sdsempty(), "%s:online", g_conf("redis.topic"));
-	redisAsyncCommand(ioctx->c, 0, 0/* privdata */, "SREM %s %s", key, io->sid);
-	sdsfree(key);
-
-	if(io->subc){
-		rc = hp_unsub(io->subc);
-	}
-
-	dictRelease(io->qos);
-	listRelease(io->outlist);
-	sdsfree(io->sid);
-
-	HP_UNUSED(rc);
-}
-
-int rmqtt_io_t_loop(rmqtt_io_t * io)
+static int rmqtt_io_t_loop(rmqtt_io_t * io)
 {
 	assert(io && io->ioctx);
 
@@ -303,6 +252,92 @@ int rmqtt_io_t_loop(rmqtt_io_t * io)
 	io->l_mid = 0;
 ret:
 	return rc;
+}
+
+static hp_io_t *  rmqttc_on_new(hp_io_ctx * ioctx, hp_sock_t fd)
+{
+	if(!ioctx) { return 0; }
+	rmqtt_io_t * io = calloc(1, sizeof(rmqtt_io_t));
+	int rc = rmqtt_io_t_init(io, (rmqtt_io_ctx *)ioctx);
+	assert(rc == 0);
+
+	return (hp_io_t *)io;
+}
+
+static int rmqttc_on_parse(hp_io_t * io, char * buf, size_t * len, int flags
+	, hp_iohdr_t ** hdrp, char ** bodyp)
+{
+	return rmqtt_parse(buf, len, flags, hdrp, bodyp);
+}
+
+static int rmqttc_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
+{
+	return rmqtt_dispatch((rmqtt_io_t *)io, imhdr, body);
+}
+
+static int rmqttc_on_loop(hp_io_t * io)
+{
+	return rmqtt_io_t_loop((rmqtt_io_t *)io);
+}
+
+static void rmqttc_on_delete(hp_io_t * io)
+{
+	if(!io) { return; }
+	rmqtt_io_t_uninit((rmqtt_io_t *)io);
+	free(io);
+}
+
+/* callbacks for rmqtt clients */
+static hp_iohdl s_rmqtthdl = {
+	.on_new = rmqttc_on_new,
+	.on_parse = rmqttc_on_parse,
+	.on_dispatch = rmqttc_on_dispatch,
+	.on_loop = rmqttc_on_loop,
+	.on_delete = rmqttc_on_delete,
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * MQTT protocol
+ * */
+int rmqtt_io_send_header(rmqtt_io_t * io, uint8_t cmd,
+        uint8_t flags, size_t len)
+{
+	int rc;
+	uint8_t * buf = calloc(1, 1 + sizeof(size_t));
+	uint8_t *vlen = &buf[1];
+
+	buf[0] = (cmd << 4) | flags;
+
+	/* mqtt variable length encoding */
+	do {
+		*vlen = len % 0x80;
+		len /= 0x80;
+		if (len > 0)
+			*vlen |= 0x80;
+		vlen++;
+	} while (len > 0);
+
+	rc = hp_io_write((hp_io_t *)io, buf, vlen - buf, free, 0);
+	return rc;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+int rmqtt_io_append(rmqtt_io_t * io, char const * topic, char const * mid, sds message, int flags)
+{
+	if(!(io && message))
+		return -1;
+
+	rmqtt_rmsg_t * jmsg = calloc(1, sizeof(rmqtt_rmsg_t));
+	jmsg->payload = sdsnew(message);
+	jmsg->topic = sdsnew(topic);
+	jmsg->mid = sdsnew(mid);
+
+	list * li = listAddNodeTail(((rmqtt_io_t *)io)->outlist, jmsg);
+	assert(li);
+
+	return 0;
 }
 
 int rmqtt_io_init(rmqtt_io_ctx * ioctx

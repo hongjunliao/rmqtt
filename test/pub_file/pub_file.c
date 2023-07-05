@@ -31,7 +31,7 @@ typedef struct pub_file_cli {
 	hp_mqtt base;
 	uv_file f;
 	sds file;
-	uv_req_t dir_req;
+	uv_fs_t dir_req;
 	uv_fs_t open_req;
 	uv_fs_t write_req;
 	uv_buf_t iov[1];
@@ -97,7 +97,7 @@ static void pub_file__disconnect_cb(hp_mqtt * mqtt, void * arg)
 }
 
 static void pub_file__message_cb(
-	hp_mqtt * mqtt, char const * topic, char const * msg, int len, void * arg)
+	hp_mqtt * mqtt, char const * topic, char * msg, int len, void * arg)
 {
 	assert(mqtt);
 	assert(arg);
@@ -129,12 +129,6 @@ static void pub_file__message_cb(
 	}
 }
 
-static void pub_file__sub_cb(hp_mqtt * mqtt, void * arg)
-{
-	assert(mqtt);
-	assert(arg);
-}
-
 static void pub_file__connect_cb_2(hp_mqtt * mqtt, int err, char const * errstr, void * arg)
 {
 	assert(mqtt);
@@ -144,7 +138,7 @@ static void pub_file__connect_cb_2(hp_mqtt * mqtt, int err, char const * errstr,
 }
 
 static void pub_file__message_cb_2(
-	hp_mqtt * mqtt, char const * topic, char const * msg, int len, void * arg)
+	hp_mqtt * mqtt, char const * topic, char * msg, int len, void * arg)
 {
 	assert(mqtt);
 	assert(arg);

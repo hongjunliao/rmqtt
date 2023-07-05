@@ -19,7 +19,7 @@
 #include "hp/hp_log.h"
 #include "hp/hp_libc.h"
 #include "protocol.h"
-#include "server.h"
+#include "rmqtt_io_t.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 
 static uint16_t getu16(const char *p) {

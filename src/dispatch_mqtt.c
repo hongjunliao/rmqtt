@@ -32,13 +32,15 @@
 #include "protocol.h"
 #include "rmqtt_io_t.h"	/* rmqtt_io_t */
 #include "redis_pub.h"
-#include "server.h"
 
 #ifdef _MSC_VER
 #define SHUT_WR SD_SEND 
 #endif /* _MSC_VER */
 
 extern int gloglevel;
+extern int rmqtt_io_append(rmqtt_io_t * client, char const * topic
+		, char const * mid, sds message, int flags);
+
 /////////////////////////////////////////////////////////////////////////////////////
 
 static void sub_cb(hp_sub_t * s, char const * topic, sds id, sds msg)

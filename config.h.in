@@ -1,0 +1,15 @@
+/*!
+ * This file is PART of rmqtt project
+ * @author hongjun.liao <docici@126.com>, @date 2018/10/30
+ *
+ * config
+ * */
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define  LIBHP_WITH_MQTT
+#define  LIBHP_WITH_REDIS
+#define  LIBHP_WITH_CJSON
+
+#endif /* CONFIG_H */

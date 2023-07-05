@@ -15,6 +15,7 @@
 #include <hiredis/async.h>
 #include "hp/hp_sock_t.h"   /* hp_sock_t */
 #include "hp/hp_io_t.h"   /* hp_io_ctx */
+#include "protocol.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,22 +49,40 @@ struct rmqtt_io_ctx {
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
+/* message from Redis */
+typedef struct rmqtt_rmsg_t {
+	sds payload;
+	sds topic; /* which topic is belongs to;  */
+	sds mid;    /* message ID */
+} rmqtt_rmsg_t;
 
-int rmqtt_io_t_init(rmqtt_io_t * io, rmqtt_io_ctx * ioctx);
-int rmqtt_io_t_loop(rmqtt_io_t * c);
-void rmqtt_io_t_uninit(rmqtt_io_t * io);
+union hp_iohdr {
+	r_mqtt_message mqtt;
+};
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 int rmqtt_io_init(rmqtt_io_ctx * ioctx
 		, hp_sock_t fd, int tcp_keepalive
 		, redisAsyncContext * c, redisAsyncContext * (* redis)()
 		, int ping_interval);
-int rmqtt_io_append(rmqtt_io_t * client, char const * topic
-		, char const * mid, sds message, int flags);
 
 int rmqtt_io_uninit(rmqtt_io_ctx * ioctx);
 
 int rmqtt_io_send_header(rmqtt_io_t * client, uint8_t cmd,
         uint8_t flags, size_t len);
+
+///////////////////////////////////////////////////////////////////////////////////////
+
+/* Keys hashing / comparison functions for dict.c hash tables. */
+uint64_t r_dictSdsHash(const void *key);
+int r_dictSdsKeyCompare(void *privdata, const void *key1, const void *key2);
+void r_dictSdsDestructor(void *privdata, void *val);
+/////////////////////////////////////////////////////////////////////////////////////////
+
+#ifndef NDEBUG
+int test_redis_pub_main(int argc, char ** argv);
+#endif //NDEBUG
 
 /////////////////////////////////////////////////////////////////////////////////////////
 

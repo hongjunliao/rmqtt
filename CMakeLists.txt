@@ -1,9 +1,7 @@
 # author hongjun.liao <docici@126.com>
 # date 2019/10/30
 
-cmake_minimum_required(VERSION 2.8)
-CMAKE_POLICY(SET CMP0015 NEW)
-configure_file( "config.h.in" "config.h")
+cmake_minimum_required(VERSION 2.8.12)
 
 if(NOT CMAKE_BUILD_TYPE)
 set(CMAKE_BUILD_TYPE Release CACHE STRING "Options are: None, Debug, Release, RelWithDebInfo, MinSizeRel." FORCE)
@@ -12,15 +10,13 @@ endif()
 # https://clangd.llvm.org/installation.html
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# show config
-message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} Options are: Debug|Release")
-
 ##########################################################################################
 # rmqtt 
 project(rmqtt)
 
-set(LIBHP_WITH_MQTT "1" CACHE INTERNAL "LIBHP_WITH_MQTT")
-set(LIBHP_WITH_REDIS "1" CACHE INTERNAL "LIBHP_WITH_REDIS")
+set(LIBHP_WITH_MQTT 1 CACHE INTERNAL "LIBHP_WITH_MQTT")
+set(LIBHP_WITH_REDIS 1 CACHE INTERNAL "LIBHP_WITH_REDIS")
+set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
 add_subdirectory(deps/libhp)
 
 # sources
@@ -104,8 +100,8 @@ else()
 	target_compile_options(pub_file PUBLIC -D_CRT_SECURE_NO_WARNINGS  /MTd)
 endif()
 
-target_include_directories(pub_file PRIVATE include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ 
-	deps/libhp/deps/redis/deps/ "${PROJECT_BINARY_DIR}")
+target_include_directories(pub_file PRIVATE  "${PROJECT_BINARY_DIR}" include/ src/ deps/libhp/include/ deps/libhp/ deps/libhp/deps/ deps/ 
+	deps/libhp/deps/redis/deps/)
 if(MSVC)
 target_include_directories(pub_file PRIVATE deps/libhp/include/win/)
 endif()
@@ -120,3 +116,4 @@ target_link_libraries(pub_file uv_a libhp  hiredis_static)
 endif()
 
 ##########################################################################################
+configure_file( "config.h.in" "config.h")
