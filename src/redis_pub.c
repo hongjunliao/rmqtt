@@ -45,7 +45,7 @@
 #include "redis_pub.h"
 #include "redis/src/version.h" /*REDIS_VERSION*/
 
-extern hp_config_t g_conf;
+extern hp_config_t g_rmqtt_conf;
 
 static uint8_t s_qoss[3] = {0, 1, 2};
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -94,7 +94,7 @@ char const * internal_do_get_postfix_from_TID(char const * topic_prefix, char co
 
 static char const * internal_get_postfix_from_TID(char const * id, int * flags)
 {
-	return id? internal_do_get_postfix_from_TID(g_conf("redis.topic"), id, flags) : id;
+	return id? internal_do_get_postfix_from_TID(g_rmqtt_conf("redis.topic"), id, flags) : id;
 }
 
 static char const * internal_get_CID_from_SID(char const * sid)
@@ -104,7 +104,7 @@ static char const * internal_get_CID_from_SID(char const * sid)
 
 	char const * id = sid;
 
-	sds pattern = sdscatfmt(sdsempty(), "%s:s:", g_conf("redis.topic"));
+	sds pattern = sdscatfmt(sdsempty(), "%s:s:", g_rmqtt_conf("redis.topic"));
 	if(strncmp(pattern, sid, sdslen(pattern)) == 0)
 		id = sid + sdslen(pattern);
 
@@ -125,7 +125,7 @@ int redis_pub(redisAsyncContext * c, char const * id, char const * msg, int len
 
 	int rc;
 
-	sds topic = internal_TID_gen(g_conf("redis.topic"), id, flags);
+	sds topic = internal_TID_gen(g_rmqtt_conf("redis.topic"), id, flags);
 	rc = hp_pub(c, topic, msg, len, done);
 	sdsfree(topic);
 
@@ -148,13 +148,13 @@ redisAsyncContext * redis_subc_arg(redisAsyncContext * c, redisAsyncContext * su
 
 	int rc;
 
-	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_conf("redis.topic"), id);
+	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_rmqtt_conf("redis.topic"), id);
 
 	/* make sure session exits for this id */
-	sds idtopic = internal_TID_gen(g_conf("redis.topic"), id, 0);
+	sds idtopic = internal_TID_gen(g_rmqtt_conf("redis.topic"), id, 0);
 	rc = redisAsyncCommand(c, 0, 0/* privdata */, "hsetnx %s %s %s", sid, idtopic, "0");
 
-	subc = hp_subc_arg(c, subc, g_conf("redis.shasub"), g_conf("redis.shasup"), sid, cb, arg);
+	subc = hp_subc_arg(c, subc, g_rmqtt_conf("redis.shasub"), g_rmqtt_conf("redis.shasup"), sid, cb, arg);
 
 	sdsfree(idtopic);
 	sdsfree(sid);
@@ -184,7 +184,7 @@ int redis_sub(rmqtt_io_t * client, int n_topic, char * const* topic, uint8_t * q
 	cvector_init(topics, 1);
 
 	if (topic && n_topic > 0) {
-		sds t = internal_TID_gen(g_conf("redis.topic"), client->sid, 0);
+		sds t = internal_TID_gen(g_rmqtt_conf("redis.topic"), client->sid, 0);
 		cvector_push_back(topics, t);
 	}
 	/* others */
@@ -193,7 +193,7 @@ int redis_sub(rmqtt_io_t * client, int n_topic, char * const* topic, uint8_t * q
 		if(!(key && strlen(key) > 0))
 			continue;
 
-		sds t = internal_TID_gen(g_conf("redis.topic"), key, 8);
+		sds t = internal_TID_gen(g_rmqtt_conf("redis.topic"), key, 8);
 		cvector_push_back(topics, t);
 		/* save QOS */
 		dictEntry * ent, *existing = 0;
@@ -234,7 +234,7 @@ int redis_sup_by_topic(redisAsyncContext * c
 	if(!(c && id && mid))
 		return -1;
 
-	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_conf("redis.topic"), id);
+	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_rmqtt_conf("redis.topic"), id);
 	int rc = redisAsyncCommand(c, (done? done : redis_sup_cb), 0/* privdata */, "hset %s %s %s", sid, topic, mid);
 
 	sdsfree(sid);
@@ -251,8 +251,8 @@ int redis_sup(redisAsyncContext * c
 	if(!(c && id && mid))
 		return -1;
 
-	sds topic = internal_TID_gen(g_conf("redis.topic"), id, flags);
-	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_conf("redis.topic"), id);
+	sds topic = internal_TID_gen(g_rmqtt_conf("redis.topic"), id, flags);
+	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_rmqtt_conf("redis.topic"), id);
 	int rc = redisAsyncCommand(c, (done ? done : redis_sup_cb), 0/* privdata */, "hset %s %s %s", sid, topic, mid);
 	assert(rc == 0);
 
@@ -279,10 +279,10 @@ int redis_sub_sadd(redisAsyncContext * c, char const * id, char const * topicstr
 		return -1;
 
 	int rc;
-	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_conf("redis.topic"), id);
-	sds topic = internal_TID_gen(g_conf("redis.topic"), topicstr, 8);
+	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_rmqtt_conf("redis.topic"), id);
+	sds topic = internal_TID_gen(g_rmqtt_conf("redis.topic"), topicstr, 8);
 
-	const char *argv[8] = {"evalsha", g_conf("redis.shasadd"), "1", topic, sid};
+	const char *argv[8] = {"evalsha", g_rmqtt_conf("redis.shasadd"), "1", topic, sid};
 
 	int argc = 5;
 	rc = redisAsyncCommandArgv(c, def_cb, (void *)argv[0]/* privdata */, argc, argv, 0);
@@ -297,8 +297,8 @@ int redis_sub_sremove(redisAsyncContext * c, char const * id, char const * topic
 	if(!(c && id && topicstr))
 		return -1;
 
-	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_conf("redis.topic"), id);
-	sds topic = internal_TID_gen(g_conf("redis.topic"), topicstr, 8);
+	sds sid = sdscatfmt(sdsempty(), "%s:s:%s", g_rmqtt_conf("redis.topic"), id);
+	sds topic = internal_TID_gen(g_rmqtt_conf("redis.topic"), topicstr, 8);
 
 	int rc = redisAsyncCommand(c, def_cb, "HDEL"/* privdata */, "HDEL %s %s", sid, topic);
 
@@ -389,8 +389,8 @@ static void is_done_3(redisAsyncContext *c, void *r, void *privdata) {
 
 int test_redis_pub_main(int argc, char ** argv)
 {
-	assert(g_conf);
-	hp_config_t cfg = g_conf;
+	assert(g_rmqtt_conf);
+	hp_config_t cfg = g_rmqtt_conf;
 
 	int i, r, rc;
 	{

@@ -66,8 +66,10 @@ int rmqtt_io_init(rmqtt_io_ctx * ioctx
 		, hp_sock_t fd, int tcp_keepalive
 		, redisAsyncContext * c, redisAsyncContext * (* redis)()
 		, int ping_interval);
-
+int rmqtt_io_run(rmqtt_io_ctx * ioctx, int interval);
 int rmqtt_io_uninit(rmqtt_io_ctx * ioctx);
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 int rmqtt_io_send_header(rmqtt_io_t * client, uint8_t cmd,
         uint8_t flags, size_t len);

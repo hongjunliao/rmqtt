@@ -30,8 +30,7 @@
 #include "protocol.h"
 #include "redis_pub.h"
 
-extern hp_config_t g_conf;
-extern int gloglevel;
+extern hp_config_t g_rmqtt_conf;
 
 extern size_t rmqtt_parse(char const * buf, size_t * nbuf, int flags
 		, hp_iohdr_t ** iohdrp, char ** bodyp);
@@ -115,7 +114,7 @@ static void rmqtt_io_t_uninit(rmqtt_io_t * io)
 	int rc;
 	rmqtt_io_ctx * ioctx = io->ioctx;
 
-	sds key = sdscatprintf(sdsempty(), "%s:online", g_conf("redis.topic"));
+	sds key = sdscatprintf(sdsempty(), "%s:online", g_rmqtt_conf("redis.topic"));
 	redisAsyncCommand(ioctx->c, 0, 0/* privdata */, "SREM %s %s", key, io->sid);
 	sdsfree(key);
 
@@ -167,7 +166,7 @@ static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 	/* for ACK */
 	io->l_mid = message_id;
 
-	if(gloglevel > 7){
+	if(hp_log_level > 7){
 		int len = sdslen(rmsg->payload);
 		hp_log(stdout, "%s: fd=%d, sending topic='%s', msgid/QOS=%u/%u, playload=%u/'%s'\n", __FUNCTION__
 				, ((hp_io_t *)io)->fd, topic, io->l_mid, 2, len, dumpstr(rmsg->payload, len, 64));
@@ -189,7 +188,7 @@ static int rmqtt_io_t_loop(rmqtt_io_t * io)
 
 		if(difftime(time(0), io->rping) > ioctx->rping_interval){
 
-			if(gloglevel > 8)
+			if(hp_log_level > 8)
 				hp_log(stdout, "%s: fd=%d, Redis PING ...\n", __FUNCTION__, ((hp_io_t *)io)->fd);
 
 			hp_sub_ping(io->subc);
@@ -224,7 +223,7 @@ static int rmqtt_io_t_loop(rmqtt_io_t * io)
 			rc = rmqtt_io_send(io, rmsg, MG_MQTT_QOS(qos));
 			rc = redis_sup_by_topic(ioctx->c, io->sid, rmsg->topic, rmsg->mid, 0);
 
-			if(gloglevel > 0){
+			if(hp_log_level > 0){
 				hp_log(stdout, "%s: Redis sup, fd=%d, io='%s', key/value='%s'/'%s'\n", __FUNCTION__
 						, ((hp_io_t *)io)->fd, io->sid, rmsg->topic, rmsg->mid);
 			}
@@ -324,20 +323,9 @@ int rmqtt_io_send_header(rmqtt_io_t * io, uint8_t cmd,
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int rmqtt_io_append(rmqtt_io_t * io, char const * topic, char const * mid, sds message, int flags)
+int rmqtt_io_run(rmqtt_io_ctx * ioctx, int interval)
 {
-	if(!(io && message))
-		return -1;
-
-	rmqtt_rmsg_t * jmsg = calloc(1, sizeof(rmqtt_rmsg_t));
-	jmsg->payload = sdsnew(message);
-	jmsg->topic = sdsnew(topic);
-	jmsg->mid = sdsnew(mid);
-
-	list * li = listAddNodeTail(((rmqtt_io_t *)io)->outlist, jmsg);
-	assert(li);
-
-	return 0;
+	return ioctx? hp_io_run((hp_io_ctx *)ioctx, interval, 0) : -1;
 }
 
 int rmqtt_io_init(rmqtt_io_ctx * ioctx

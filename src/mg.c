@@ -17,7 +17,7 @@
 #include "hp/hp_err.h"
 
 extern redisAsyncContext * g_redis;
-extern hp_config_t g_conf;
+extern hp_config_t g_rmqtt_conf;
 /////////////////////////////////////////////////////////////////////////////////////////
 
 /**!
@@ -37,7 +37,7 @@ static sds api_pub(const char *ptr, size_t len)
 	}
 	err[0] =  '\0';
 
-	sds topic = sdscatfmt(sdsempty(), "%s:%s", g_conf("redis.topic"), cjson_sval(ijson, "topic", ""));
+	sds topic = sdscatfmt(sdsempty(), "%s:%s", g_rmqtt_conf("redis.topic"), cjson_sval(ijson, "topic", ""));
 	char const * payload = cjson_sval(ijson, "payload", "");
 	rc = hp_pub(g_redis, topic, payload, strlen(payload), 0);
 
@@ -68,7 +68,7 @@ static struct user *getuser(struct mg_http_message *hm, struct user *u) {
 	// In production, make passwords strong and tokens randomly generated
 	// In this example, user list is kept in RAM. In production, it can
 	// be backed by file, database, or some other method.
-	struct user const U = { g_conf("mqtt.user"), g_conf("mqtt.pwd"), "admin_token" };
+	struct user const U = { g_rmqtt_conf("mqtt.user"), g_rmqtt_conf("mqtt.pwd"), "admin_token" };
 	char user[256], pass[256];
 	mg_http_creds(hm, user, sizeof(user), pass, sizeof(pass));
 	if (user[0] != '\0' && pass[0] != '\0') {
@@ -123,7 +123,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 			sdsfree(s);
 		}
 		else {
-			struct mg_http_serve_opts opts = { .root_dir = g_conf("web_root") };
+			struct mg_http_serve_opts opts = { .root_dir = g_rmqtt_conf("web_root") };
 			mg_http_serve_dir(c, ev_data, &opts);
 		}
 	}
@@ -132,7 +132,7 @@ static void cb(struct mg_connection *c, int ev, void *ev_data, void *fn_data) {
 int mg_init(struct mg_mgr * mgr, struct mg_timer * t1, struct mg_timer * t2) {
 	mg_log_set("2");                              // Set to 3 to enable debug
 	mg_mgr_init(mgr);
-	struct mg_connection * nc = mg_http_listen(mgr, g_conf("url"), cb, mgr);
+	struct mg_connection * nc = mg_http_listen(mgr, g_rmqtt_conf("url"), cb, mgr);
 
 	return (nc ? 0 : -1);
 }

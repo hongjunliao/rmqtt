@@ -77,8 +77,6 @@ struct mg_timer t1obj, t2obj, *t1 = &t1obj, *t2 = &t2obj;
 
 /* global for Redis */
 redisAsyncContext * g_redis = 0;
-/* global loglevel */
-int gloglevel = 9;
 
 /* config table. char * => char * */
 static dictType configTableDictType = {
@@ -97,7 +95,7 @@ static char const * cfg(char const * id) {
 	sdsfree(key);
 	return v? (char *)v : "";
 }
-hp_config_t g_conf = cfg;
+hp_config_t g_rmqtt_conf = cfg;
 static int s_quit = 0;
 
 /* the default configure file */
@@ -219,7 +217,7 @@ static int inih_handler(void* user, const char* section, const char* name,
 		n_workers = atoi(value);
 #endif /* _MSC_VER */
 	else if(strcmp(name, "loglevel") == 0){
-		gloglevel = atoi(value);
+		hp_log_level = atoi(value);
 	}
 	
 	dictAdd(cfg, sdsnew(name), sdsnew(value));
@@ -311,7 +309,7 @@ static int handle_signal()
 			chlds[i] = 0;
 			--n_chlds;
 
-			if(gloglevel > 0)
+			if(hp_log_level > 0)
 				hp_log(stdout, "%s/%d: SIGCHLD on worker pid=%d, n_workers=%d/%d\n"
 					, __FUNCTION__, getpid(), pid, n_chlds, n_workers);
 		}
@@ -405,7 +403,7 @@ int main(int argc, char ** argv)
 			return 0;
 			break;
 		case 'v':
-			gloglevel = atoi(arg);
+			hp_log_level = atoi(arg);
 			break;
 		case 'h':
 			hp_log(stdout, "rmqtt - a Redis-based MQTT broker\n"
@@ -465,7 +463,7 @@ int main(int argc, char ** argv)
 			mg_mgr_poll(mgr, cfgi("hz"));
 		}
 		else {
-			hp_io_run((hp_io_ctx *)s_ioctx, cfgi("hz"), 0);
+			rmqtt_io_run(s_ioctx, cfgi("hz"));
 		}
 #else
 #if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
