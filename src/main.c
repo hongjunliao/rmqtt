@@ -67,7 +67,8 @@ static hp_sig ghp_sigobj = { 0 }, *s_sig = &ghp_sigobj;
 #endif /* _MSC_VER */
 
 /* rmqtt server */
-static rmqtt_io_ctx s_ioctxobj = { 0 }, * s_ioctx = &s_ioctxobj;
+static hp_io_ctx s_ioctxobj, * s_ioctx = &s_ioctxobj;
+static rmqtt_io_ctx s_rmqttobj = { 0 }, * s_rmqtt = &s_rmqttobj;
 
 /* HTTP  */
 #if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
@@ -238,7 +239,9 @@ static int init_chld()
 	/* init Redis */
     g_redis = redis_get();
     if(!g_redis){ return -2; }
-	rc = rmqtt_io_init(s_ioctx, s_listenfd, cfgi("tcp-keepalive")
+    rc  = hp_io_init(s_ioctx);
+    if(rc != 0){ return -3; }
+	rc = rmqtt_io_init(s_rmqtt, s_ioctx, s_listenfd, cfgi("tcp-keepalive")
 		, g_redis, redis_get, cfgi("redis.ping"));
 	return rc;
 }
@@ -434,7 +437,7 @@ int main(int argc, char ** argv)
 	s_listenfd = hp_net_listen(cfgi("mqtt.port"));
 	if (s_listenfd <= 0) { return -2; }
 #ifdef _MSC_VER
-	rc = rmqtt_io_init(s_ioctx, s_listenfd, cfgi("tcp-keepalive")
+	rc = rmqtt_io_init(s_rmqtt, s_listenfd, cfgi("tcp-keepalive")
 		, g_redis, redis_get, cfgi("redis.ping"));
 	if (rc != 0) { return -3;}
 #else
@@ -463,13 +466,13 @@ int main(int argc, char ** argv)
 			mg_mgr_poll(mgr, cfgi("hz"));
 		}
 		else {
-			rmqtt_io_run(s_ioctx, cfgi("hz"));
+			rmqtt_io_run(s_rmqtt, cfgi("hz"));
 		}
 #else
 #if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 		mg_mgr_poll(mgr, cfgi("hz"));
 #endif /* LIBHP_WITH_WIN32_INTERROP */
-		hp_io_run((hp_io_ctx *)s_ioctx, cfgi("hz"), 0);
+		hp_io_run((hp_io_ctx *)s_rmqtt, cfgi("hz"), 0);
 #endif /* _MSC_VER */
 		rev_run(s_ev);
 	}
@@ -477,10 +480,10 @@ int main(int argc, char ** argv)
 	/* unit */
 #ifndef _MSC_VER
 	if(!is_master){
-		rmqtt_io_uninit(s_ioctx);
+		rmqtt_io_uninit(s_rmqtt);
 	}
 #else
-	rmqtt_io_uninit(s_ioctx);
+	rmqtt_io_uninit(s_rmqtt);
 #endif /* _MSC_VER */
 #if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 	mg_timer_free(t1);

@@ -32,7 +32,7 @@
 
 extern hp_config_t g_rmqtt_conf;
 
-extern size_t rmqtt_parse(char const * buf, size_t * nbuf, int flags
+extern size_t rmqtt_parse(char const * buf, size_t * nbuf
 		, hp_iohdr_t ** iohdrp, char ** bodyp);
 extern int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body);
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -169,7 +169,7 @@ static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 	if(hp_log_level > 7){
 		int len = sdslen(rmsg->payload);
 		hp_log(stdout, "%s: fd=%d, sending topic='%s', msgid/QOS=%u/%u, playload=%u/'%s'\n", __FUNCTION__
-				, ((hp_io_t *)io)->fd, topic, io->l_mid, 2, len, dumpstr(rmsg->payload, len, 64));
+				, (hp_io_fd((hp_io_t *)io)), topic, io->l_mid, 2, len, dumpstr(rmsg->payload, len, 64));
 	}
 
 	return rc;
@@ -189,7 +189,7 @@ static int rmqtt_io_t_loop(rmqtt_io_t * io)
 		if(difftime(time(0), io->rping) > ioctx->rping_interval){
 
 			if(hp_log_level > 8)
-				hp_log(stdout, "%s: fd=%d, Redis PING ...\n", __FUNCTION__, ((hp_io_t *)io)->fd);
+				hp_log(stdout, "%s: fd=%d, Redis PING ...\n", __FUNCTION__, (hp_io_fd((hp_io_t *)io)));
 
 			hp_sub_ping(io->subc);
 			io->rping = time(0);
@@ -225,7 +225,7 @@ static int rmqtt_io_t_loop(rmqtt_io_t * io)
 
 			if(hp_log_level > 0){
 				hp_log(stdout, "%s: Redis sup, fd=%d, io='%s', key/value='%s'/'%s'\n", __FUNCTION__
-						, ((hp_io_t *)io)->fd, io->sid, rmsg->topic, rmsg->mid);
+						, (hp_io_fd((hp_io_t *)io)), io->sid, rmsg->topic, rmsg->mid);
 			}
 			sdsclear(rmsg->mid);
 		}
@@ -253,20 +253,20 @@ ret:
 	return rc;
 }
 
-static hp_io_t *  rmqttc_on_new(hp_io_ctx * ioctx, hp_sock_t fd)
+static hp_io_t *  rmqttc_on_new(hp_io_t * cio, hp_sock_t fd)
 {
-	if(!ioctx) { return 0; }
+	if(!(cio && cio->user)) { return 0; }
 	rmqtt_io_t * io = calloc(1, sizeof(rmqtt_io_t));
-	int rc = rmqtt_io_t_init(io, (rmqtt_io_ctx *)ioctx);
+	int rc = rmqtt_io_t_init(io, (rmqtt_io_ctx *)cio->user);
 	assert(rc == 0);
 
 	return (hp_io_t *)io;
 }
 
-static int rmqttc_on_parse(hp_io_t * io, char * buf, size_t * len, int flags
+static int rmqttc_on_parse(hp_io_t * io, char * buf, size_t * len
 	, hp_iohdr_t ** hdrp, char ** bodyp)
 {
-	return rmqtt_parse(buf, len, flags, hdrp, bodyp);
+	return rmqtt_parse(buf, len, hdrp, bodyp);
 }
 
 static int rmqttc_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
@@ -291,8 +291,12 @@ static hp_iohdl s_rmqtthdl = {
 	.on_new = rmqttc_on_new,
 	.on_parse = rmqttc_on_parse,
 	.on_dispatch = rmqttc_on_dispatch,
-	.on_loop = rmqttc_on_loop,
 	.on_delete = rmqttc_on_delete,
+	.on_loop = rmqttc_on_loop,
+#ifdef _MSC_VER
+	.wm_user = 0 	/* WM_USER + N */
+	.hwnd = 0    /* hwnd */
+#endif /* _MSC_VER */
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -328,33 +332,30 @@ int rmqtt_io_run(rmqtt_io_ctx * ioctx, int interval)
 	return ioctx? hp_io_run((hp_io_ctx *)ioctx, interval, 0) : -1;
 }
 
-int rmqtt_io_init(rmqtt_io_ctx * ioctx
+int rmqtt_io_init(rmqtt_io_ctx * rmqtt, hp_io_ctx * ioctx
 	, hp_sock_t fd, int tcp_keepalive
 	, redisAsyncContext * c, redisAsyncContext * (*redis)()
 	, int ping_interval)
 {
 	int rc;
-	if (!(ioctx && c && redis)) { return -1; }
+	if (!(rmqtt && c && redis)) { return -1; }
 
-	hp_ioopt ioopt = { fd, 0, s_rmqtthdl
-#ifdef _MSC_VER
-		, 200  /* poll timeout */
-		, 0    /* hwnd */
-#endif /* _MSC_VER */
-	};
-	rc = hp_io_init((hp_io_ctx *)ioctx, &ioopt);
-	if (rc != 0) { return -3; }
+	rmqtt->ioctx = ioctx;
+	rmqtt->c = c;
+	rmqtt->redis = redis;
+	rmqtt->rping_interval = ping_interval;
 
-	ioctx->c = c;
-	ioctx->redis = redis;
-	ioctx->rping_interval = ping_interval;
+	rc = hp_io_add(rmqtt->ioctx, &rmqtt->listenio, fd, s_rmqtthdl);
+	if (rc != 0) { return -4; }
+
+	rmqtt->listenio.user = rmqtt;
 
 	return rc;
 }
 
 int rmqtt_io_uninit(rmqtt_io_ctx * ioctx)
 {
-	return hp_io_uninit((hp_io_ctx *)ioctx);
+	return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

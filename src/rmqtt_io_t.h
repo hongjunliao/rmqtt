@@ -41,7 +41,8 @@ struct rmqtt_io_t {
 };
 
 struct rmqtt_io_ctx {
-	hp_io_ctx base;
+	hp_io_ctx * ioctx;
+	hp_io_t listenio;
 	redisAsyncContext * c;
 	redisAsyncContext * (* redis)();
 	int rping_interval; /* redis ping-pong interval */
@@ -62,10 +63,10 @@ union hp_iohdr {
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int rmqtt_io_init(rmqtt_io_ctx * ioctx
-		, hp_sock_t fd, int tcp_keepalive
-		, redisAsyncContext * c, redisAsyncContext * (* redis)()
-		, int ping_interval);
+int rmqtt_io_init(rmqtt_io_ctx * rmqtt, hp_io_ctx * ioctx
+	, hp_sock_t fd, int tcp_keepalive
+	, redisAsyncContext * c, redisAsyncContext * (*redis)()
+	, int ping_interval);
 int rmqtt_io_run(rmqtt_io_ctx * ioctx, int interval);
 int rmqtt_io_uninit(rmqtt_io_ctx * ioctx);
 

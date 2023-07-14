@@ -37,7 +37,7 @@ static const char *scanto(const char *p, struct rmqtt_str *s) {
  * skip unrecognized data and continue read and parse?
  * if NOT set, return as parse error
  *  */
-size_t rmqtt_parse(char * buf, size_t * nbuf, int flags
+size_t rmqtt_parse(char * buf, size_t * nbuf
 	, hp_iohdr_t ** iohdrp, char ** bodyp)
 {
 	int rc;

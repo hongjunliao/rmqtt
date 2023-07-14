@@ -73,7 +73,7 @@ static void sub_cb(hp_sub_t * s, char const * topic, sds id, sds msg)
 		if(io){
 			io->subc = 0;
 			/* NOT close(fd) */
-			shutdown(((hp_io_t *)io)->fd, SHUT_WR);
+			shutdown(hp_io_fd(((hp_io_t *)io)), SHUT_WR);
 		}
 
 		return;
@@ -92,7 +92,7 @@ static void sub_cb(hp_sub_t * s, char const * topic, sds id, sds msg)
 
 	if(hp_log_level > 0){
 		hp_log(stdout, "%s: Redis message, fd=%d, io='%s', key/value='%s'/'%s'\n", __FUNCTION__
-				, ((hp_io_t *)io)->fd
+				, hp_io_fd(((hp_io_t *)io))
 				, io->sid, topic
 				, dumpstr(msg, sdslen(msg), 8));
 	}
@@ -163,7 +163,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
     if (msg->cmd == MG_EV_MQTT_PINGREQ) {
     	io->l_time = time(0);
 		if(hp_log_level > 0){
-			hp_log(stdout, "%s: <== fd=%d, PINGREQ\n", __FUNCTION__, ((hp_io_t *)io)->fd);
+			hp_log(stdout, "%s: <== fd=%d, PINGREQ\n", __FUNCTION__, hp_io_fd(((hp_io_t *)io)));
 		}
     	libim_mqtt_pong(io);
     	rc = 0;
@@ -175,7 +175,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 		io->sid = sdscpylen(io->sid, msg->client_id.p, msg->client_id.len);
 		if(hp_log_level > 0){
 			hp_log(stdout, "%s: <== fd=%d, CONNECT with id/username/password='%s'/'%.*s'/'%.*s'\n", __FUNCTION__
-					, ((hp_io_t *)io)->fd, (msg->client_id.len > 0? io->sid : "")
+					, hp_io_fd(((hp_io_t *)io)), (msg->client_id.len > 0? io->sid : "")
 							, (int) msg->user_name.len, msg->user_name.p, (int) msg->password.len,
 			           msg->password.p);
 		}
@@ -217,7 +217,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 			rc = libim_mqtt_suback(io, qoss, cvector_size(qoss), msg->message_id);
 
 			if(hp_log_level > 0){
-				hp_log(stdout, "%s: <== fd=%d, SUBSCRIBE topics=%d\n", __FUNCTION__, ((hp_io_t *)io)->fd, cvector_size(topics));
+				hp_log(stdout, "%s: <== fd=%d, SUBSCRIBE topics=%d\n", __FUNCTION__, hp_io_fd(((hp_io_t *)io)), cvector_size(topics));
 			}
 		} else {
 			/* We did not fully parse the payload, something must be wrong. */
@@ -248,7 +248,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 
 		if(hp_log_level > 0){
 			hp_log(stdout, "%s: <== fd=%d, PUBLISH topic='%s', msgid/QOS=%u/%u, playload=%u/'%s', return=%d\n", __FUNCTION__
-					, ((hp_io_t *)io)->fd, topic, msg->message_id, msg->qos, len, dumpstr(data, len, 8), rc);
+					, hp_io_fd(((hp_io_t *)io)), topic, msg->message_id, msg->qos, len, dumpstr(data, len, 8), rc);
 		}
 		sdsfree(topic);
 	}
@@ -270,7 +270,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 
 			if(hp_log_level > 0){
 				hp_log(stdout, "%s: Redis sup, fd=%d, io='%s', key/value='%s'/'%s'\n", __FUNCTION__
-						, ((hp_io_t *)io)->fd, io->sid, rmsg->topic, rmsg->mid);
+						, hp_io_fd(((hp_io_t *)io)), io->sid, rmsg->topic, rmsg->mid);
 			}
 			/* this message is ACKed */
 			sdsclear(rmsg->mid);
@@ -281,10 +281,10 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 		rmqtt_io_send_header(io, MG_MQTT_CMD_PUBCOMP, 0, 0);
 		break;
 	case MG_EV_MQTT_DISCONNECT:
-		shutdown(((hp_io_t *)io)->fd, SHUT_WR);
+		shutdown(hp_io_fd(((hp_io_t *)io)), SHUT_WR);
 		break;
 	default:
-		hp_log(stderr, "%s: <== fd=%d, unknown MQTT message, id=%d\n", __FUNCTION__, ((hp_io_t *)io)->fd, msg->cmd);
+		hp_log(stderr, "%s: <== fd=%d, unknown MQTT message, id=%d\n", __FUNCTION__, hp_io_fd(((hp_io_t *)io)), msg->cmd);
 		break;
 	}
 ret:
