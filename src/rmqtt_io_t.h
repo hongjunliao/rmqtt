@@ -37,7 +37,7 @@ struct rmqtt_io_t {
 	listNode * l_msg; 	/* last message sent, from outlist */
 	time_t l_time;      /* last send time */
 	int l_mid;          /* MQTT msgid */
-	rmqtt_io_ctx * ioctx;
+	rmqtt_io_ctx * rctx;
 };
 
 struct rmqtt_io_ctx {
@@ -67,7 +67,6 @@ int rmqtt_io_init(rmqtt_io_ctx * rmqtt, hp_io_ctx * ioctx
 	, hp_sock_t fd, int tcp_keepalive
 	, redisAsyncContext * c, redisAsyncContext * (*redis)()
 	, int ping_interval);
-int rmqtt_io_run(rmqtt_io_ctx * ioctx, int interval);
 int rmqtt_io_uninit(rmqtt_io_ctx * ioctx);
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -79,8 +78,8 @@ int rmqtt_io_send_header(rmqtt_io_t * client, uint8_t cmd,
 
 /* Keys hashing / comparison functions for dict.c hash tables. */
 uint64_t r_dictSdsHash(const void *key);
-int r_dictSdsKeyCompare(void *privdata, const void *key1, const void *key2);
-void r_dictSdsDestructor(void *privdata, void *val);
+int r_dictSdsKeyCompare(dict *d, const void *key1, const void *key2);
+void r_dictSdsDestructor(dict *d, void *key);
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG

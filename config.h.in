@@ -12,4 +12,8 @@
 #define  LIBHP_WITH_REDIS
 #define  LIBHP_WITH_CJSON
 
+#define GIT_COMMIT_ID "${GIT_COMMIT_ID}"
+#define GIT_BRANCH "${GIT_BRANCH}"
+#define GIT_TAG "${GIT_TAG}"
+
 #endif /* CONFIG_H */

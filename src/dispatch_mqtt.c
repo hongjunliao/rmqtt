@@ -154,11 +154,11 @@ static int libim_mqtt_pong(rmqtt_io_t * io) {
 
 int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body) 
 {
-	if (!(io && iohdr && io->ioctx)){ return -1; }
+	if (!(io && iohdr && io->rctx)){ return -1; }
 
 	int i, rc = 0;
 	r_mqtt_message * msg = &iohdr->mqtt;
-	rmqtt_io_ctx * ioctx = (rmqtt_io_ctx *) io->ioctx;
+	rmqtt_io_ctx * ioctx = (rmqtt_io_ctx *) io->rctx;
 
     if (msg->cmd == MG_EV_MQTT_PINGREQ) {
     	io->l_time = time(0);
@@ -184,7 +184,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 		if(!io->subc){
 			io->subc = ioctx->redis();
 
-			hp_sub_arg_t arg = {io->ioctx, ((hp_io_t *)io)->id};
+			hp_sub_arg_t arg = {io->rctx, ((hp_io_t *)io)->id};
 			io->subc = redis_subc_arg(ioctx->c, io->subc, io->sid, sub_cb, arg);
 		}
 

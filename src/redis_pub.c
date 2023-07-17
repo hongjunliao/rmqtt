@@ -416,12 +416,12 @@ int test_redis_pub_main(int argc, char ** argv)
 		NULL                    /* val destructor */
 	};
 	rmqtt_io_t clientobj = { 0 }, * client = &clientobj;
-	client->qos = dictCreate(&qosTableDictType, NULL);
+	client->qos = dictCreate(&qosTableDictType);
 	hp_redis_ev_t s_evobj, *rev = &s_evobj;
 	rev_init(rev); assert(rev);
 
 	r = hp_redis_init(&pubc, rev, cfg("redis"), cfg("redis.password"), 0);
-	pubc->dataCleanup = 0;
+//	pubc->dataCleanup = 0;
 	assert(r == 0 && pubc);
 	r = hp_redis_init(&client->subc, rev, cfg("redis"), cfg("redis.password"), 0);
 	assert(r == 0 && client->subc);

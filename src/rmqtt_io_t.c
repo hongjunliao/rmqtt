@@ -86,16 +86,16 @@ static dictType qosTableDictType = {
 	NULL                    /* val destructor */
 };
 
-static int rmqtt_io_t_init(rmqtt_io_t * io, rmqtt_io_ctx * ioctx)
+static int rmqtt_io_t_init(rmqtt_io_t * io, rmqtt_io_ctx * rctx)
 {
-	if(!(io && ioctx))
+	if(!(io && rctx))
 		return -1;
 
 	memset(io, 0, sizeof(rmqtt_io_t));
 
 	io->sid = sdsnew("");
-	io->ioctx = ioctx;
-	io->qos = dictCreate(&qosTableDictType, NULL);
+	io->rctx = rctx;
+	io->qos = dictCreate(&qosTableDictType);
 
 	io->outlist = listCreate();
 //	listSetDupMethod(io->outlist, sdslist_dup);
@@ -112,10 +112,10 @@ static void rmqtt_io_t_uninit(rmqtt_io_t * io)
 		return ;
 
 	int rc;
-	rmqtt_io_ctx * ioctx = io->ioctx;
+	rmqtt_io_ctx * rctx = io->rctx;
 
 	sds key = sdscatprintf(sdsempty(), "%s:online", g_rmqtt_conf("redis.topic"));
-	redisAsyncCommand(ioctx->c, 0, 0/* privdata */, "SREM %s %s", key, io->sid);
+	redisAsyncCommand(rctx->c, 0, 0/* privdata */, "SREM %s %s", key, io->sid);
 	sdsfree(key);
 
 	if(io->subc){
@@ -135,13 +135,13 @@ static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 	if(!(io && rmsg))
 		return -1;
 
-	rmqtt_io_ctx * ioctx = io->ioctx;
+	rmqtt_io_ctx * rctx = io->rctx;
 	sds topic = sdsnew(redis_cli_topic(rmsg->topic));
 	int len = sdslen(rmsg->payload);
 
-	uint16_t message_id = ++ioctx->mqid;
-	if(ioctx->mqid + 1 == UINT16_MAX)
-		ioctx->mqid = 0;
+	uint16_t message_id = ++rctx->mqid;
+	if(rctx->mqid + 1 == UINT16_MAX)
+		rctx->mqid = 0;
 
 	uint16_t netbytes;
 	uint16_t topic_len = sdslen(topic);
@@ -177,16 +177,16 @@ static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 
 static int rmqtt_io_t_loop(rmqtt_io_t * io)
 {
-	assert(io && io->ioctx);
+	assert(io && io->rctx);
 
 	int rc = 0;
-	rmqtt_io_ctx * ioctx = io->ioctx;
+	rmqtt_io_ctx * rctx = io->rctx;
 	rmqtt_rmsg_t * rmsg = 0;
 
 	/* redis ping/pong */
-	if(ioctx->rping_interval > 0 && io->subc){
+	if(rctx->rping_interval > 0 && io->subc){
 
-		if(difftime(time(0), io->rping) > ioctx->rping_interval){
+		if(difftime(time(0), io->rping) > rctx->rping_interval){
 
 			if(hp_log_level > 8)
 				hp_log(stdout, "%s: fd=%d, Redis PING ...\n", __FUNCTION__, (hp_io_fd((hp_io_t *)io)));
@@ -203,7 +203,7 @@ static int rmqtt_io_t_loop(rmqtt_io_t * io)
 
 		/* QOS > 0 need ACK */
 		dictEntry * ent = dictFind(io->qos, rmsg->topic);
-		int qos = (ent? ent->v.u64 : 2);
+		int qos = (ent? dictGetUnsignedIntegerVal(ent) : 2);
 
 		if(qos > 0){
 			/* check if current ACKed */
@@ -221,7 +221,7 @@ static int rmqtt_io_t_loop(rmqtt_io_t * io)
 		}
 		else{ /* QOS=0 at most once */
 			rc = rmqtt_io_send(io, rmsg, MG_MQTT_QOS(qos));
-			rc = redis_sup_by_topic(ioctx->c, io->sid, rmsg->topic, rmsg->mid, 0);
+			rc = redis_sup_by_topic(rctx->c, io->sid, rmsg->topic, rmsg->mid, 0);
 
 			if(hp_log_level > 0){
 				hp_log(stdout, "%s: Redis sup, fd=%d, io='%s', key/value='%s'/'%s'\n", __FUNCTION__
@@ -276,6 +276,8 @@ static int rmqttc_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
 
 static int rmqttc_on_loop(hp_io_t * io)
 {
+	if(io->iohdl.on_new)
+		return 0;
 	return rmqtt_io_t_loop((rmqtt_io_t *)io);
 }
 
@@ -327,11 +329,6 @@ int rmqtt_io_send_header(rmqtt_io_t * io, uint8_t cmd,
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-int rmqtt_io_run(rmqtt_io_ctx * ioctx, int interval)
-{
-	return ioctx? hp_io_run((hp_io_ctx *)ioctx, interval, 0) : -1;
-}
-
 int rmqtt_io_init(rmqtt_io_ctx * rmqtt, hp_io_ctx * ioctx
 	, hp_sock_t fd, int tcp_keepalive
 	, redisAsyncContext * c, redisAsyncContext * (*redis)()
@@ -345,10 +342,11 @@ int rmqtt_io_init(rmqtt_io_ctx * rmqtt, hp_io_ctx * ioctx
 	rmqtt->redis = redis;
 	rmqtt->rping_interval = ping_interval;
 
+	rmqtt->listenio.user = rmqtt;
+
 	rc = hp_io_add(rmqtt->ioctx, &rmqtt->listenio, fd, s_rmqtthdl);
 	if (rc != 0) { return -4; }
 
-	rmqtt->listenio.user = rmqtt;
 
 	return rc;
 }

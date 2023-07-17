@@ -46,7 +46,7 @@
 #include "hp/hp_test.h"    /* hp_test */
 #include "mongoose/mongoose.h"
 #include "rmqtt_io_t.h"
-#include "gen/git_commit_id.h"	/* GIT_BRANCH_NAME, GIT_COMMIT_ID */
+//#include "gen/git_commit_id.h"	/* GIT_BRANCH_NAME, GIT_COMMIT_ID */
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -137,10 +137,10 @@ static redisAsyncContext * redis_get()
 
 /////////////////////////////////////////////////////////////////////////////////////////
 /*====================== Hash table type implementation  ==================== */
-int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
+int r_dictSdsKeyCompare(dict *d, const void *key1, const void *key2)
 {
     int l1,l2;
-    DICT_NOTUSED(privdata);
+//    DICT_NOTUSED(privdata);
 
     l1 = sdslen((sds)key1);
     l2 = sdslen((sds)key2);
@@ -153,16 +153,16 @@ int r_dictSdsKeyCompare(void *privdata, const void *key1,  const void *key2)
 static int dictSdsKeyCaseCompare(void *privdata, const void *key1,
         const void *key2)
 {
-    DICT_NOTUSED(privdata);
+//    DICT_NOTUSED(privdata);
 
     return strcasecmp(key1, key2) == 0;
 }
 
-void r_dictSdsDestructor(void *privdata, void *val)
+void r_dictSdsDestructor(dict *d, void *key)
 {
-    DICT_NOTUSED(privdata);
+//    DICT_NOTUSED(privdata);
 
-    sdsfree(val);
+    sdsfree(key);
 }
 
 uint64_t r_dictSdsHash(const void *key) {
@@ -328,7 +328,9 @@ static int handle_signal()
 int main(int argc, char ** argv)
 {
 	int rc;
-	fprintf(stdout, "%s: build at %s %s\n", __FUNCTION__, __DATE__, __TIME__);
+	hp_log(stdout, "%s-%s, build at %s %s\n"
+			, GIT_BRANCH, GIT_COMMIT_ID
+			, __DATE__, __TIME__ );
 #if (defined _MSC_VER) && (!defined LIBHP_WITH_WIN32_INTERROP)
 	/* init winsock */
 	WSADATA wsd;
@@ -355,7 +357,7 @@ int main(int argc, char ** argv)
 
 #endif /* LIBHP_WITH_ZLOG */
 	/* config */
-	config = dictCreate(&configTableDictType, 0);
+	config = dictCreate(&configTableDictType);
 
 	if(access(conf, F_OK) == 0) {
 		if (ini_parse(conf, inih_handler, config) < 0) {
@@ -393,7 +395,7 @@ int main(int argc, char ** argv)
 			dictIterator * iter = dictGetIterator(config);
 			dictEntry * ent;
 			for(ent = 0; (ent = dictNext(iter));){
-				printf("'%s'=>'%s'\n", (char *)ent->key, (char *)ent->v.val);
+				printf("'%s'=>'%s'\n", (char *)dictGetKey(ent), (char *)dictGetVal(ent));
 			}
 			dictReleaseIterator(iter);
 			return 0;
@@ -401,7 +403,7 @@ int main(int argc, char ** argv)
 			break;
 		case 'V':
 			hp_log(stdout, "%s-%s, build at %s %s\n"
-					, GIT_BRANCH_NAME, GIT_COMMIT_ID
+					, GIT_BRANCH, GIT_COMMIT_ID
 					, __DATE__, __TIME__ );
 			return 0;
 			break;
@@ -437,7 +439,7 @@ int main(int argc, char ** argv)
 	s_listenfd = hp_net_listen(cfgi("mqtt.port"));
 	if (s_listenfd <= 0) { return -2; }
 #ifdef _MSC_VER
-	rc = rmqtt_io_init(s_rmqtt, s_listenfd, cfgi("tcp-keepalive")
+	rc = rmqtt_io_init(s_rmqtt, s_ioctx, s_listenfd, cfgi("tcp-keepalive")
 		, g_redis, redis_get, cfgi("redis.ping"));
 	if (rc != 0) { return -3;}
 #else
@@ -466,7 +468,7 @@ int main(int argc, char ** argv)
 			mg_mgr_poll(mgr, cfgi("hz"));
 		}
 		else {
-			rmqtt_io_run(s_rmqtt, cfgi("hz"));
+			hp_io_run(s_rmqtt->ioctx, cfgi("hz"), 0);
 		}
 #else
 #if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)

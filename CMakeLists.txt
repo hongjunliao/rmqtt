@@ -61,7 +61,7 @@ target_include_directories(rmqtt PRIVATE deps/libhp/include/win/)
 endif()
 if(LIBHP_WITH_WIN32_INTERROP)
 target_include_directories(rmqtt PRIVATE deps/libhp/deps/redis/deps/)
-endif()
+endif()	
 
 target_compile_options(rmqtt PUBLIC
     -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
@@ -81,6 +81,19 @@ if(LIBHP_WITH_WIN32_INTERROP)
 	target_link_libraries(rmqtt Win32_Interop lua jemalloc redis-server uv_a)
 endif()
 
+###########################################################################################
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_ID
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process(
+    COMMAND git symbolic-ref --short HEAD
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
 ###########################################################################################
 configure_file("config.h.in" "config.h")
 
