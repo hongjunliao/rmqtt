@@ -38,7 +38,7 @@ set(LIBHP_WITH_MQTT 1 CACHE INTERNAL "LIBHP_WITH_MQTT")
 set(LIBHP_WITH_REDIS 1 CACHE INTERNAL "LIBHP_WITH_REDIS")
 set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
 
-hp_cmake_find_deps(SRCS RMQTT_WITH_NULL_ g_withs g_hdrs g_incs g_deps g_libs)
+hp_cmake_find_deps(SRCS RMQTT_WITH_NULL_ deps g_withs g_hdrs g_incs g_deps g_libs)
 if(MSVC)
 	file(GLOB SRCS ${SRCS} deps/libc/*.c)
 endif()
