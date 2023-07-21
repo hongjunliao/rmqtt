@@ -152,12 +152,12 @@ static int libim_mqtt_pong(rmqtt_io_t * io) {
   return rmqtt_io_send_header(io, MG_MQTT_CMD_PINGRESP, 0, 0);
 }
 
-int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body) 
+int rmqtt_dispatch(rmqtt_io_t * io, void * hdr, void * body)
 {
-	if (!(io && iohdr && io->rctx)){ return -1; }
+	if (!(io && hdr && io->rctx)){ return -1; }
 
 	int i, rc = 0;
-	r_mqtt_message * msg = &iohdr->mqtt;
+	r_mqtt_message * msg = (r_mqtt_message *)hdr;
 	rmqtt_io_ctx * ioctx = (rmqtt_io_ctx *) io->rctx;
 
     if (msg->cmd == MG_EV_MQTT_PINGREQ) {
@@ -288,7 +288,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body)
 		break;
 	}
 ret:
-	free(iohdr);
+	free(hdr);
 
 	return rc;
 }

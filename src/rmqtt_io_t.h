@@ -57,10 +57,6 @@ typedef struct rmqtt_rmsg_t {
 	sds mid;    /* message ID */
 } rmqtt_rmsg_t;
 
-union hp_iohdr {
-	r_mqtt_message mqtt;
-};
-
 /////////////////////////////////////////////////////////////////////////////////////////
 
 int rmqtt_io_init(rmqtt_io_ctx * rmqtt, hp_io_ctx * ioctx

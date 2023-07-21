@@ -38,18 +38,17 @@ static const char *scanto(const char *p, struct rmqtt_str *s) {
  * if NOT set, return as parse error
  *  */
 size_t rmqtt_parse(char * buf, size_t * nbuf
-	, hp_iohdr_t ** iohdrp, char ** bodyp)
+	, void ** hdrp, void ** bodyp)
 {
 	int rc;
-	if (!(buf && nbuf && iohdrp && bodyp))
+	if (!(buf && nbuf && hdrp && bodyp))
 		return -1;
 
 	rc = -1;
-	*iohdrp = (void *) 0;
+	*hdrp = (void *) 0;
 	*bodyp = (void *) 0;
 
-	hp_iohdr_t * hdr = calloc(1, sizeof(hp_iohdr_t));
-	r_mqtt_message * imhdr = &hdr->mqtt;
+	r_mqtt_message * hdr = calloc(1, sizeof(r_mqtt_message));
 
 	uint8_t header;
 	uint32_t len, len_len; /* must be 32-bit, see #1055 */
@@ -83,42 +82,42 @@ size_t rmqtt_parse(char * buf, size_t * nbuf
 		goto ret;
 	}
 
-	imhdr->cmd = cmd;
-	imhdr->qos = MG_MQTT_GET_QOS(header);
+	hdr->cmd = cmd;
+	hdr->qos = MG_MQTT_GET_QOS(header);
 
 	switch (cmd) {
 	case MG_MQTT_CMD_CONNECT: {
-		p = scanto(p, &imhdr->protocol_name);
+		p = scanto(p, &hdr->protocol_name);
 		if (p > end - 4)
 			goto ret;
-		imhdr->protocol_version = *(uint8_t *) p++;
-		imhdr->connect_flags = *(uint8_t *) p++;
-		imhdr->keep_alive_timer = getu16(p);
+		hdr->protocol_version = *(uint8_t *) p++;
+		hdr->connect_flags = *(uint8_t *) p++;
+		hdr->keep_alive_timer = getu16(p);
 		p += 2;
 		if (p >= end)
 			goto ret;
-		p = scanto(p, &imhdr->client_id);
+		p = scanto(p, &hdr->client_id);
 		if (p > end)
 			goto ret;
-		if (imhdr->connect_flags & MG_MQTT_HAS_WILL) {
+		if (hdr->connect_flags & MG_MQTT_HAS_WILL) {
 			if (p >= end)
 				goto ret;
-			p = scanto(p, &imhdr->will_topic);
+			p = scanto(p, &hdr->will_topic);
 		}
-		if (imhdr->connect_flags & MG_MQTT_HAS_WILL) {
+		if (hdr->connect_flags & MG_MQTT_HAS_WILL) {
 			if (p >= end)
 				goto ret;
-			p = scanto(p, &imhdr->will_message);
+			p = scanto(p, &hdr->will_message);
 		}
-		if (imhdr->connect_flags & MG_MQTT_HAS_USER_NAME) {
+		if (hdr->connect_flags & MG_MQTT_HAS_USER_NAME) {
 			if (p >= end)
 				goto ret;
-			p = scanto(p, &imhdr->user_name);
+			p = scanto(p, &hdr->user_name);
 		}
-		if (imhdr->connect_flags & MG_MQTT_HAS_PASSWORD) {
+		if (hdr->connect_flags & MG_MQTT_HAS_PASSWORD) {
 			if (p >= end)
 				goto ret;
-			p = scanto(p, &imhdr->password);
+			p = scanto(p, &hdr->password);
 		}
 		if (p != end)
 			goto ret;
@@ -126,18 +125,18 @@ size_t rmqtt_parse(char * buf, size_t * nbuf
 	    hp_log(stdout,
 	          "%s: %d %2x %d proto [%.*s] client_id [%.*s] will_topic [%.*s] "
 	           "will_msg [%.*s] user_name [%.*s] password [%.*s]\n", __FUNCTION__,
-	           (int) len, (int) imhdr->connect_flags, (int) imhdr->keep_alive_timer,
-	           (int) imhdr->protocol_name.len, imhdr->protocol_name.p,
-	           (int) imhdr->client_id.len, imhdr->client_id.p, (int) imhdr->will_topic.len,
-	           imhdr->will_topic.p, (int) imhdr->will_message.len, imhdr->will_message.p,
-	           (int) imhdr->user_name.len, imhdr->user_name.p, (int) imhdr->password.len,
-	           imhdr->password.p);
+	           (int) len, (int) hdr->connect_flags, (int) hdr->keep_alive_timer,
+	           (int) hdr->protocol_name.len, hdr->protocol_name.p,
+	           (int) hdr->client_id.len, hdr->client_id.p, (int) hdr->will_topic.len,
+	           hdr->will_topic.p, (int) hdr->will_message.len, hdr->will_message.p,
+	           (int) hdr->user_name.len, hdr->user_name.p, (int) hdr->password.len,
+	           hdr->password.p);
 		break;
 	}
 	case MG_MQTT_CMD_CONNACK:
 		if (end - p < 2)
 			goto ret;
-		imhdr->connack_ret_code = p[1];
+		hdr->connack_ret_code = p[1];
 		break;
 	case MG_MQTT_CMD_PUBACK:
 	case MG_MQTT_CMD_PUBREC:
@@ -146,54 +145,54 @@ size_t rmqtt_parse(char * buf, size_t * nbuf
 	case MG_MQTT_CMD_SUBACK:
 		if (end - p < 2)
 			goto ret;
-		imhdr->message_id = getu16(p);
+		hdr->message_id = getu16(p);
 		p += 2;
 		break;
 	case MG_MQTT_CMD_PUBLISH: {
-		p = scanto(p, &imhdr->topic);
+		p = scanto(p, &hdr->topic);
 		if (p > end)
 			goto ret;
-		if (imhdr->qos > 0) {
+		if (hdr->qos > 0) {
 			if (end - p < 2)
 				goto ret;
-			imhdr->message_id = getu16(p);
+			hdr->message_id = getu16(p);
 			p += 2;
 		}
- 	    imhdr->payload.p = *bodyp = p;
-	    imhdr->payload.len = end - p;
+ 	    hdr->payload.p = *bodyp = p;
+	    hdr->payload.len = end - p;
 		break;
 	}
 	case MG_MQTT_CMD_SUBSCRIBE:
 		if (end - p < 2)
 			goto ret;
-		imhdr->message_id = getu16(p);
+		hdr->message_id = getu16(p);
 		p += 2;
 		/*
 		 * topic expressions are left in the payload and can be parsed with
 		 * `mg_mqtt_next_subscribe_topic`
 		 */
- 	    imhdr->payload.p = *bodyp = p;
-	    imhdr->payload.len = end - p;
+ 	    hdr->payload.p = *bodyp = p;
+	    hdr->payload.len = end - p;
 		break;
 	default:
 		/* Unhandled command */
 		break;
 	}
 
-	imhdr->len = end - buf;
+	hdr->len = end - buf;
 
-	memmove(buf, buf + imhdr->len, *nbuf - imhdr->len);
-	*nbuf -= imhdr->len;
+	memmove(buf, buf + hdr->len, *nbuf - hdr->len);
+	*nbuf -= hdr->len;
 
-	imhdr->cmd += MG_MQTT_EVENT_BASE;
+	hdr->cmd += MG_MQTT_EVENT_BASE;
 
-	rc = imhdr->len;
+	rc = hdr->len;
 
 ret:
 	if(rc <= 0)
 		free(hdr);
 	else{
-		*iohdrp = hdr;
+		*hdrp = hdr;
 	}
 	return rc;
 }

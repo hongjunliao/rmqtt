@@ -33,8 +33,8 @@
 extern hp_config_t g_rmqtt_conf;
 
 extern size_t rmqtt_parse(char const * buf, size_t * nbuf
-		, hp_iohdr_t ** iohdrp, char ** bodyp);
-extern int rmqtt_dispatch(rmqtt_io_t * io, hp_iohdr_t * iohdr, char * body);
+		, void ** iohdrp, void ** bodyp);
+extern int rmqtt_dispatch(rmqtt_io_t * io, void * iohdr, void * body);
 /////////////////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -264,14 +264,14 @@ static hp_io_t *  rmqttc_on_new(hp_io_t * cio, hp_sock_t fd)
 }
 
 static int rmqttc_on_parse(hp_io_t * io, char * buf, size_t * len
-	, hp_iohdr_t ** hdrp, char ** bodyp)
+	, void ** hdrp, void ** bodyp)
 {
 	return rmqtt_parse(buf, len, hdrp, bodyp);
 }
 
-static int rmqttc_on_dispatch(hp_io_t * io, hp_iohdr_t * imhdr, char * body)
+static int rmqttc_on_dispatch(hp_io_t * io, void * hdr, void * body)
 {
-	return rmqtt_dispatch((rmqtt_io_t *)io, imhdr, body);
+	return rmqtt_dispatch((rmqtt_io_t *)io, hdr, body);
 }
 
 static int rmqttc_on_loop(hp_io_t * io)
