@@ -256,11 +256,22 @@ ret:
 static hp_io_t *  rmqttc_on_new(hp_io_t * cio, hp_sock_t fd)
 {
 	if(!(cio && cio->user)) { return 0; }
-	rmqtt_io_t * io = calloc(1, sizeof(rmqtt_io_t));
-	int rc = rmqtt_io_t_init(io, (rmqtt_io_ctx *)cio->user);
+	rmqtt_io_t * c = calloc(1, sizeof(rmqtt_io_t));
+	int rc = rmqtt_io_t_init(c, (rmqtt_io_ctx *)cio->user);
 	assert(rc == 0);
 
-	return (hp_io_t *)io;
+	hp_iohdl niohdl = cio->iohdl;
+	niohdl.on_new = 0;
+	rc = hp_io_add(cio->ioctx, (hp_io_t *)c, fd, niohdl);
+	if (rc != 0) {
+		rmqtt_io_t_uninit(c);
+		free(c);
+		return 0;
+	}
+
+	c->base.addr = cio->addr;
+
+	return (hp_io_t *)c;
 }
 
 static int rmqttc_on_parse(hp_io_t * io, char * buf, size_t * len
@@ -281,7 +292,7 @@ static int rmqttc_on_loop(hp_io_t * io)
 	return rmqtt_io_t_loop((rmqtt_io_t *)io);
 }
 
-static void rmqttc_on_delete(hp_io_t * io)
+static void rmqttc_on_delete(hp_io_t * io, int err, char const * errstr)
 {
 	if(!io) { return; }
 	rmqtt_io_t_uninit((rmqtt_io_t *)io);
