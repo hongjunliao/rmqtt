@@ -26,13 +26,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(WIN32)
 	# getopt
+	set(getopt_hdr .nullfilesrc.h)
 	set(getopt_lib "deps/getopt/*.c")
 else()
+	set(getopt_hdr getopt.h)
 	set(getopt_lib c)
 endif()
 
 set(g_withs 1 1 1 1)
-set(g_hdrs .nullfilesub.h .nullfilesrc.h .nullfilesrc.h getopt.h)
+set(g_hdrs .nullfilesub.h .nullfilesrc.h .nullfilesrc.h ${getopt_hdr})
 set(g_incs "deps/libhp/include/" "${PROJECT_BINARY_DIR}/ deps/libhp/deps/" deps/ deps/getopt/)
 set(g_deps libhp .src mongoose getopt)
 set(g_libs libhp "src/*.c" "deps/mongoose/mongoose.c" ${getopt_lib})
