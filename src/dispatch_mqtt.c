@@ -8,10 +8,10 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #include "redis/src/adlist.h" /* list */
 #include "hp/sdsinc.h"     	/* sds */
-#include <unistd.h>
+//#include <unistd.h>
 #include <string.h> 	/* strlen */
 #include <stdio.h>
 #include <string.h>     /* memset, ... */
@@ -19,7 +19,6 @@
 #include <assert.h>     /* define NDEBUG to disable assertion */
 #include <time.h>
 #include <stdlib.h>
-#include "zlog.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_log.h"     /* hp_log */
 #include "hp/hp_libc.h"    /* hp_min */
@@ -275,6 +274,7 @@ int rmqtt_dispatch(rmqtt_io_t * io, void * hdr, void * body)
 			/* this message is ACKed */
 			sdsclear(rmsg->mid);
 		}
+		else rc = -1;
 	}
 		break;
 	case MG_EV_MQTT_PUBREL:

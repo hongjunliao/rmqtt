@@ -21,7 +21,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #include "redis/src/adlist.h" /* list */
 
 #include <time.h>
@@ -34,7 +34,6 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include "zlog.h"			/* zlog */
 #include "hp/sdsinc.h"
 #include "hp/string_util.h" /* hp_vercmp */
 //#include "uuid/uuid.h"

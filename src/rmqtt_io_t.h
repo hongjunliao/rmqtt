@@ -9,7 +9,7 @@
 #define RMQTT_IO_T_H
 
 #include "redis/src/adlist.h" /* list */
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #include "redis/src/dict.h"	  /* dict */
 #include "hp/sdsinc.h"    /* sds */
 #include <hiredis/async.h>
@@ -47,6 +47,7 @@ struct rmqtt_io_ctx {
 	redisAsyncContext * (* redis)();
 	int rping_interval; /* redis ping-pong interval */
 	uint16_t mqid;		/* mqtt message_id */
+	int n_in;			/*  */
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -64,7 +65,7 @@ int rmqtt_io_init(rmqtt_io_ctx * rmqtt, hp_io_ctx * ioctx
 	, redisAsyncContext * c, redisAsyncContext * (*redis)()
 	, int ping_interval);
 int rmqtt_io_uninit(rmqtt_io_ctx * ioctx);
-
+#define rmqtt_io_size(ioctx) ((ioctx)->n_in)
 /////////////////////////////////////////////////////////////////////////////////////////
 
 int rmqtt_io_send_header(rmqtt_io_t * client, uint8_t cmd,

@@ -8,12 +8,12 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #ifndef _MSC_VER
 #include <sys/time.h> /*gettimeofday*/
 #endif /* _MSC_VER */
 #include "rmqtt_io_t.h"
-#include <unistd.h>
+//#include <unistd.h>
 #include <time.h>
 #include <errno.h>
 #include <stdio.h>
@@ -255,9 +255,11 @@ ret:
 
 static hp_io_t *  rmqttc_on_new(hp_io_t * cio, hp_sock_t fd)
 {
-	if(!(cio && cio->user)) { return 0; }
+	assert(cio && cio->user);
+	rmqtt_io_ctx * ctx = (rmqtt_io_ctx *)cio->user;
+
 	rmqtt_io_t * c = calloc(1, sizeof(rmqtt_io_t));
-	int rc = rmqtt_io_t_init(c, (rmqtt_io_ctx *)cio->user);
+	int rc = rmqtt_io_t_init(c, ctx);
 	assert(rc == 0);
 
 	hp_iohdl niohdl = cio->iohdl;
@@ -270,6 +272,13 @@ static hp_io_t *  rmqttc_on_new(hp_io_t * cio, hp_sock_t fd)
 	}
 
 	c->base.addr = cio->addr;
+	++ctx->n_in;
+
+	if (hp_log_level > 0) {
+		char buf[64] = "";
+		hp_log(stdout, "%s: New MQTT connection from '%s', total=%d\n", __FUNCTION__
+			, get_ipport_cstr2(&cio->addr, ":", buf, sizeof(buf)), rmqtt_io_size(ctx));
+	}
 
 	return (hp_io_t *)c;
 }
@@ -294,8 +303,17 @@ static int rmqttc_on_loop(hp_io_t * io)
 
 static void rmqttc_on_delete(hp_io_t * io, int err, char const * errstr)
 {
-	if(!io) { return; }
-	rmqtt_io_t_uninit((rmqtt_io_t *)io);
+	rmqtt_io_t * c = (rmqtt_io_t *)io;
+	assert(c && c->rctx);
+	--c->rctx->n_in;
+
+	if (hp_log_level > 0) {
+		char buf[64] = "";
+		hp_log(stdout, "%s: Delete MQTT connection '%s', %d/'%s', total=%d\n", __FUNCTION__
+			, get_ipport_cstr2(&io->addr, ":", buf, sizeof(buf)), err, errstr, rmqtt_io_size(c->rctx));
+	}
+
+	rmqtt_io_t_uninit(c);
 	free(io);
 }
 
@@ -305,11 +323,7 @@ static hp_iohdl s_rmqtthdl = {
 	.on_parse = rmqttc_on_parse,
 	.on_dispatch = rmqttc_on_dispatch,
 	.on_delete = rmqttc_on_delete,
-	.on_loop = rmqttc_on_loop,
-#ifdef _MSC_VER
-	.wm_user = 0 	/* WM_USER + N */
-	.hwnd = 0    /* hwnd */
-#endif /* _MSC_VER */
+	.on_loop = rmqttc_on_loop
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 
 ###########################################################################################
 cmake_minimum_required(VERSION 2.8.12)
-include(deps/libhp/cmakefiles/libhp.cmake) # hp_cmake_find_deps
+include(deps/libhp/cmakes/libhp.cmake) # hp_cmake_find_deps
 
 ###########################################################################################
 # rmqtt 
@@ -23,13 +23,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 ###########################################################################################
 # sources and deps
-set(g_withs 1 1 1 1 1 1 1)
-set(g_hdrs .nullfilesub.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h .nullfilesrc.h)
-set(g_incs "deps/libhp/include/" .find_path "${PROJECT_BINARY_DIR}/ deps/" .find_path .find_path .find_path .find_path )
-set(g_deps libhp sds .src mongoose inih redis c-vector)
-set(g_libs libhp "deps/sds/*.c" "src/*.c " "deps/mongoose/mongoose.c" "deps/inih/*.c"
-	"deps/redis/src/adlist.c deps/redis/src/zmalloc.c deps/redis/src/dict.c deps/redis/src/siphash.c deps/redis/src/mt19937-64.c"
-	"deps/c-vector/*.c deps/c-vector/*.cc")
+
+if(WIN32)
+	# getopt
+	set(getopt_lib "deps/getopt/*.c")
+else()
+	set(getopt_lib c)
+endif()
+
+set(g_withs 1 1 1 1)
+set(g_hdrs .nullfilesub.h .nullfilesrc.h .nullfilesrc.h getopt.h)
+set(g_incs "deps/libhp/include/" "${PROJECT_BINARY_DIR}/ deps/libhp/deps/" deps/ deps/getopt/)
+set(g_deps libhp .src mongoose getopt)
+set(g_libs libhp "src/*.c" "deps/mongoose/mongoose.c" ${getopt_lib})
 
 ###########################################################################################
 
@@ -38,7 +44,7 @@ set(LIBHP_WITH_MQTT 1 CACHE INTERNAL "LIBHP_WITH_MQTT")
 set(LIBHP_WITH_REDIS 1 CACHE INTERNAL "LIBHP_WITH_REDIS")
 set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
 
-hp_cmake_find_deps(SRCS RMQTT_WITH_NULL_ deps g_withs g_hdrs g_incs g_deps g_libs)
+hp_cmake_find_deps(SRCS RMQTT_WITH_NULL_ deps cmakes g_withs g_hdrs g_incs g_deps g_libs)
 if(MSVC)
 	file(GLOB SRCS ${SRCS} deps/libc/*.c)
 endif()
@@ -48,7 +54,7 @@ add_executable(rmqtt ${SRCS} )
 ###########################################################################################
 
 foreach(dep IN LISTS g_deps  )
-	message("rmqtt: dep='${dep}', ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
+	hp_log("rmqtt: dep='${dep}', ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
 	target_include_directories(rmqtt PRIVATE ${${dep}_INCLUDE_DIRS} )
 	target_link_libraries(rmqtt ${${dep}_LIBRARIES} ) 
 endforeach() 
@@ -56,12 +62,12 @@ endforeach()
 #target_include_directories(rmqtt PRIVATE "${PROJECT_BINARY_DIR}" src/ deps/libhp/include/ 
 #	deps/libhp/ deps/libhp/deps/ deps/)
 	
-if(MSVC)
-target_include_directories(rmqtt PRIVATE deps/libhp/include/win/)
-endif()
-if(LIBHP_WITH_WIN32_INTERROP)
-target_include_directories(rmqtt PRIVATE deps/libhp/deps/redis/deps/)
-endif()	
+#if(MSVC)
+#target_include_directories(rmqtt PRIVATE deps/libhp/include/win/)
+#endif()
+#if(LIBHP_WITH_WIN32_INTERROP)
+#target_include_directories(rmqtt PRIVATE deps/libhp/deps/redis/deps/)
+#endif()	
 
 target_compile_options(rmqtt PUBLIC
     -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
@@ -73,14 +79,18 @@ target_compile_options(rmqtt PUBLIC
     -DcJSON_FREE_PRINT
 )
 if(MSVC)
-	target_compile_options(rmqtt PUBLIC -D_CRT_SECURE_NO_WARNINGS  /MTd)
+	target_compile_options(rmqtt PUBLIC -D_CRT_SECURE_NO_WARNINGS)
+#	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+#		target_compile_options(rmqtt PUBLIC /MTd)
+#	else()
+#		target_compile_options(rmqtt PUBLIC /MT)
+#	endif()
 endif()
 
-target_link_directories(rmqtt PRIVATE lib/ deps/libhp/lib/)
-if(LIBHP_WITH_WIN32_INTERROP)
-	target_link_libraries(rmqtt Win32_Interop lua jemalloc redis-server uv_a)
-endif()
-
+#target_link_directories(rmqtt PRIVATE lib/ deps/libhp/lib/)
+#if(LIBHP_WITH_WIN32_INTERROP)
+#	target_link_libraries(rmqtt Win32_Interop lua jemalloc redis-server uv_a)
+#endif()
 ###########################################################################################
 execute_process(
     COMMAND git rev-parse --short HEAD
@@ -96,7 +106,6 @@ execute_process(
 )
 ###########################################################################################
 configure_file("config.h.in" "config.h")
-
 ################################################################################################################################################
 
 

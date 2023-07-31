@@ -7,7 +7,7 @@
 #include "config.h"
 #endif /* HAVE_CONFIG_H */
 
-#include "Win32_Interop.h"
+//#include "Win32_Interop.h"
 #include "redis/src/adlist.h" /* list */
 #ifndef _MSC_VER
 #include <sys/wait.h>
@@ -18,7 +18,7 @@
 #endif /* LIBHP_WITH_WIN32_INTERROP */
 
 #include "hp/sdsinc.h"        /* sds */
-#include <unistd.h>        /* _SC_IOV_MAX */
+//#include <unistd.h>        /* _SC_IOV_MAX */
 #include <locale.h>
 #include <time.h>
 #include <stdio.h>
@@ -31,7 +31,7 @@
 #include <getopt.h>		/* getopt_long */
 #include "hiredis/hiredis.h"
 #include <hiredis/adapters/libuv.h>
-#include "zlog.h"			/* zlog */
+
 #include "c-vector/cvector.h"	/**/
 #include "inih/ini.h"
 #include "hp/str_dump.h"   /* dumpstr */
@@ -239,7 +239,13 @@ static int init_chld()
 	/* init Redis */
     g_redis = redis_get();
     if(!g_redis){ return -2; }
-    rc  = hp_io_init(s_ioctx);
+	hp_ioopt opt = {
+#ifdef _MSC_VER
+		.wm_user = 900, /* WM_USER + N */
+		.hwnd = 0		/* hwnd */
+#endif /* _MSC_VER */
+	};
+    rc  = hp_io_init(s_ioctx, opt);
     if(rc != 0){ return -3; }
 	rc = rmqtt_io_init(s_rmqtt, s_ioctx, s_listenfd, cfgi("tcp-keepalive")
 		, g_redis, redis_get, cfgi("redis.ping"));
@@ -437,8 +443,18 @@ int main(int argc, char ** argv)
 	if (!g_redis) { return -11; }
 	/* init listening port */
 	s_listenfd = hp_net_listen(cfgi("mqtt.port"));
-	if (s_listenfd <= 0) { return -2; }
+	if (!hp_sock_is_valid(s_listenfd)) { return -2; }
 #ifdef _MSC_VER
+	hp_ioopt opt = {
+#ifdef _MSC_VER
+		.wm_user = 900, /* WM_USER + N */
+		.hwnd = 0		/* hwnd */
+#endif /* _MSC_VER */
+	};
+
+	rc = hp_io_init(s_ioctx, opt);
+	if (rc != 0) { return -3; }
+
 	rc = rmqtt_io_init(s_rmqtt, s_ioctx, s_listenfd, cfgi("tcp-keepalive")
 		, g_redis, redis_get, cfgi("redis.ping"));
 	if (rc != 0) { return -3;}
@@ -453,12 +469,14 @@ int main(int argc, char ** argv)
 	hp_log(stdout, "%s: listening on port=%d, waiting for connection ...\n", __FUNCTION__
 			, cfgi("mqtt.port"));
 #ifndef NDEBUG
+#if (defined _MSC_VER && defined LIBHP_WITH_DLFCN) || !defined _MSC_VER
 	char const * test = cfg("test");
 	if(strlen(test) > 0){
 		rc = hp_test(test, argc, argv, 0, 0);
 		return rc;
 	}
 #endif
+#endif //NDEBUG
 	/* run */
 	for(;!s_quit;){
 #ifndef _MSC_VER
@@ -474,7 +492,7 @@ int main(int argc, char ** argv)
 #if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 		mg_mgr_poll(mgr, cfgi("hz"));
 #endif /* LIBHP_WITH_WIN32_INTERROP */
-		hp_io_run((hp_io_ctx *)s_rmqtt, cfgi("hz"), 0);
+		hp_io_run(s_ioctx, cfgi("hz"), 0);
 #endif /* _MSC_VER */
 		rev_run(s_ev);
 	}
@@ -505,4 +523,5 @@ int main(int argc, char ** argv)
 		, (is_master ? "master" : "worker"), getpid());
 #endif /* _MSC_VER */
 	return 0;
+
 }
