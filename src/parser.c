@@ -17,7 +17,7 @@
 #include <string.h>
 #include <assert.h>
 #include "hp/hp_log.h"
-#include "hp/hp_libc.h"
+#include "hp/hp_stdlib.h"
 #include "protocol.h"
 #include "rmqtt_io_t.h"
 /////////////////////////////////////////////////////////////////////////////////////////

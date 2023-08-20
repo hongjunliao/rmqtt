@@ -442,7 +442,7 @@ int main(int argc, char ** argv)
 	g_redis = redis_get();
 	if (!g_redis) { return -11; }
 	/* init listening port */
-	s_listenfd = hp_net_listen(cfgi("mqtt.port"));
+	s_listenfd = hp_tcp_listen(cfgi("mqtt.port"));
 	if (!hp_sock_is_valid(s_listenfd)) { return -2; }
 #ifdef _MSC_VER
 	hp_ioopt opt = {

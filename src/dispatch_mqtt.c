@@ -21,7 +21,7 @@
 #include <stdlib.h>
 #include "c-vector/cvector.h"
 #include "hp/hp_log.h"     /* hp_log */
-#include "hp/hp_libc.h"    /* hp_min */
+#include "hp/hp_stdlib.h"    /* hp_min */
 #include "hp/hp_pub.h"     /*  */
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"/* sdslen_null */
@@ -54,16 +54,21 @@ static int rmqtt_io_append(rmqtt_io_t * io, char const * topic, char const * mid
 	return 0;
 }
 
+static int sub_cb_find_by_id(const void *key, const void *ptr)
+{
+	assert(key && ptr);
+	hp_io_t * io = (hp_io_t *)ptr;
+	int id = *(int *)key;
+	return io->id == id;
+}
+
 static void sub_cb(hp_sub_t * s, char const * topic, sds id, sds msg)
 {
 	assert(s && msg && s->arg._1);
 	int rc;
 
 	rmqtt_io_ctx * ioctx = (rmqtt_io_ctx *)s->arg._1;
-	hp_io_t key = { 0 };
-	key.id = s->arg._2;
-	listNode * node = listSearchKey(((hp_io_ctx *)ioctx)->iolist, &key);
-	rmqtt_io_t * io = node? (rmqtt_io_t *)listNodeValue(node) : 0;
+	rmqtt_io_t * io = hp_io_find(ioctx, &s->arg._2, sub_cb_find_by_id);
 
 	if(!topic){
 		hp_log(stderr, "%s: erorr %s\n", __FUNCTION__, msg);

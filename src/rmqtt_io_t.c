@@ -155,14 +155,14 @@ static int rmqtt_io_send(rmqtt_io_t * io, rmqtt_rmsg_t * rmsg, int flags)
 
 	netbytes = htons(topic_len);
 	hp_io_write((hp_io_t *)io, &netbytes, 2, (void *)-1, 0);
-	rc = hp_io_write((hp_io_t *)io, (void *)(topic), topic_len, (hp_io_free_t)sdsfree, 0);
+	rc = hp_io_write((hp_io_t *)io, (void *)(topic), topic_len, (hp_free_t)sdsfree, 0);
 
 	if (MG_MQTT_GET_QOS(flags) > 0) {
 		netbytes = htons(message_id);
 		hp_io_write((hp_io_t *)io, &netbytes, 2, (void *)-1, 0);
 	}
 
-	rc = hp_io_write((hp_io_t *)io, (void *)sdsdup(rmsg->payload), len, (hp_io_free_t)sdsfree, 0);
+	rc = hp_io_write((hp_io_t *)io, (void *)sdsdup(rmsg->payload), len, (hp_free_t)sdsfree, 0);
 	/* for ACK */
 	io->l_mid = message_id;
 
@@ -277,7 +277,7 @@ static hp_io_t *  rmqttc_on_new(hp_io_t * cio, hp_sock_t fd)
 	if (hp_log_level > 0) {
 		char buf[64] = "";
 		hp_log(stdout, "%s: New MQTT connection from '%s', total=%d\n", __FUNCTION__
-			, get_ipport_cstr2(&cio->addr, ":", buf, sizeof(buf)), rmqtt_io_size(ctx));
+			, hp_addr4name(&cio->addr, ":", buf, sizeof(buf)), rmqtt_io_size(ctx));
 	}
 
 	return (hp_io_t *)c;
@@ -310,7 +310,7 @@ static void rmqttc_on_delete(hp_io_t * io, int err, char const * errstr)
 	if (hp_log_level > 0) {
 		char buf[64] = "";
 		hp_log(stdout, "%s: Delete MQTT connection '%s', %d/'%s', total=%d\n", __FUNCTION__
-			, get_ipport_cstr2(&io->addr, ":", buf, sizeof(buf)), err, errstr, rmqtt_io_size(c->rctx));
+			, hp_addr4name(&io->addr, ":", buf, sizeof(buf)), err, errstr, rmqtt_io_size(c->rctx));
 	}
 
 	rmqtt_io_t_uninit(c);

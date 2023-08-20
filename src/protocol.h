@@ -10,7 +10,7 @@
 
 #include <stddef.h>
 #include <string.h>
-#include "hp/hp_libc.h"
+#include "hp/hp_stdlib.h"
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __cplusplus
