@@ -11,6 +11,7 @@
 #define  LIBHP_WITH_MQTT
 #define  LIBHP_WITH_REDIS
 #define  LIBHP_WITH_CJSON
+#define  LIBHP_WITH_SSL
 
 #define GIT_COMMIT_ID "${GIT_COMMIT_ID}"
 #define GIT_BRANCH "${GIT_BRANCH}"

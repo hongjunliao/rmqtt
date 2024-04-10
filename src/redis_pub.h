@@ -6,6 +6,10 @@
 #ifndef REDIS_PB_H__
 #define REDIS_PB_H__
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif /* HAVE_CONFIG_H */
+
 #include "hp/hp_pub.h"
 #include "rmqtt_io_t.h"
 

@@ -45,6 +45,8 @@ set(g_libs libhp "src/*.c" "deps/mongoose/mongoose.c" ${getopt_lib})
 set(LIBHP_WITH_MQTT 1 CACHE INTERNAL "LIBHP_WITH_MQTT")
 set(LIBHP_WITH_REDIS 1 CACHE INTERNAL "LIBHP_WITH_REDIS")
 set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
+set(LIBHP_WITH_WSAPOLL 1 CACHE INTERNAL "LIBHP_WITH_WSAPOLL")
+set(LIBHP_WITH_SSL 1 CACHE INTERNAL "LIBHP_WITH_SSL")
 
 hp_cmake_find_deps(SRCS RMQTT_WITH_NULL_ deps cmakes g_withs g_hdrs g_incs g_deps g_libs)
 if(MSVC)

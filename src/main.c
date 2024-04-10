@@ -430,6 +430,7 @@ int main(int argc, char ** argv)
 	//test_hp_fs_main(argc, argv);
 	// test_redis_pub_main(argc, argv);
 //	test_hp_io_t_main(argc, argv);
+	test_hp_ssl_main(argc, argv);
 #endif
 	/* init HTTP for master */
 #if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
@@ -466,17 +467,12 @@ int main(int argc, char ** argv)
 	if (hp_sig_init(s_sig, on_sigchld, on_sigexit, 0, 0, 0) != 0) { return -1; }
 #endif /* _MSC_VER */
 
+#ifndef NDEBUG
+	if(strstr(cfg("test"), ".libhp"))
+		assert(libhp_all_tests_main(argc, argv) == 0);
+#endif //NDEBUG
 	hp_log(stdout, "%s: listening on port=%d, waiting for connection ...\n", __FUNCTION__
 			, cfgi("mqtt.port"));
-#ifndef NDEBUG
-#if (defined _MSC_VER && defined LIBHP_WITH_DLFCN) || !defined _MSC_VER
-	char const * test = cfg("test");
-	if(strlen(test) > 0){
-		rc = hp_test(test, argc, argv, 0, 0);
-		return rc;
-	}
-#endif
-#endif //NDEBUG
 	/* run */
 	for(;!s_quit;){
 #ifndef _MSC_VER
