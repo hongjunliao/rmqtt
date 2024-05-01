@@ -13,10 +13,6 @@
 #include <sys/wait.h>
 #endif /* _MSC_VER */
 
-#ifdef LIBHP_WITH_WIN32_INTERROP
-#include "redis/src/Win32_Interop/Win32_QFork.h"
-#endif /* LIBHP_WITH_WIN32_INTERROP */
-
 #include "hp/sdsinc.h"        /* sds */
 //#include <unistd.h>        /* _SC_IOV_MAX */
 #include <locale.h>
@@ -71,10 +67,8 @@ static hp_io_ctx s_ioctxobj, * s_ioctx = &s_ioctxobj;
 static rmqtt_io_ctx s_rmqttobj = { 0 }, * s_rmqtt = &s_rmqttobj;
 
 /* HTTP  */
-#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 struct mg_mgr mgrobj, *mgr = &mgrobj;
 struct mg_timer t1obj, t2obj, *t1 = &t1obj, *t2 = &t2obj;
-#endif
 
 /* global for Redis */
 redisAsyncContext * g_redis = 0;
@@ -240,6 +234,7 @@ static int init_chld()
     g_redis = redis_get();
     if(!g_redis){ return -2; }
 	hp_ioopt opt = {
+		.timeout = cfgi("hz")
 #ifdef _MSC_VER
 		.wm_user = 900, /* WM_USER + N */
 		.hwnd = 0		/* hwnd */
@@ -337,14 +332,14 @@ int main(int argc, char ** argv)
 	hp_log(stdout, "%s-%s, build at %s %s\n"
 			, GIT_BRANCH, GIT_COMMIT_ID
 			, __DATE__, __TIME__ );
-#if (defined _MSC_VER) && (!defined LIBHP_WITH_WIN32_INTERROP)
+#ifdef _MSC_VER
 	/* init winsock */
 	WSADATA wsd;
 	if (WSAStartup(MAKEWORD(2, 2), &wsd) != 0) {
 		fprintf(stdout, "%s: error WSAStartup, err=%d\n", __FUNCTION__, WSAGetLastError());
 		return 1;
 	}
-#endif /* LIBHP_WITH_WIN32_INTERROP */				
+#endif /*  */
 	setlocale(LC_COLLATE, "");
 	srand((unsigned int)time(NULL) ^ getpid());   /* cast (unsigned int) */
 
@@ -433,9 +428,7 @@ int main(int argc, char ** argv)
 	test_hp_ssl_main(argc, argv);
 #endif
 	/* init HTTP for master */
-#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 	if (mg_init(mgr, t1, t2) != 0) { return -4; }
-#endif /* LIBHP_WITH_WIN32_INTERROP */
 	/* init event loop */
 	rev_init(s_ev);
 	if (!s_ev) { return -3; }
@@ -482,13 +475,11 @@ int main(int argc, char ** argv)
 			mg_mgr_poll(mgr, cfgi("hz"));
 		}
 		else {
-			hp_io_run(s_rmqtt->ioctx, cfgi("hz"), 0);
+			hp_io_run(s_rmqtt->ioctx, 1);
 		}
 #else
-#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 		mg_mgr_poll(mgr, cfgi("hz"));
-#endif /* LIBHP_WITH_WIN32_INTERROP */
-		hp_io_run(s_ioctx, cfgi("hz"), 0);
+		hp_io_run(s_rmqtt->ioctx, 1);
 #endif /* _MSC_VER */
 		rev_run(s_ev);
 	}
@@ -501,11 +492,9 @@ int main(int argc, char ** argv)
 #else
 	rmqtt_io_uninit(s_rmqtt);
 #endif /* _MSC_VER */
-#if (!defined _MSC_VER) || (!defined LIBHP_WITH_WIN32_INTERROP)
 	mg_timer_free(t1);
 	mg_timer_free(t2);
 	mg_mgr_free(mgr);
-#endif /* LIBHP_WITH_WIN32_INTERROP */
 
 	hp_redis_uninit(g_redis);
 	rev_close(s_ev);
@@ -515,7 +504,7 @@ int main(int argc, char ** argv)
 	sdsfree(zconf);
 
 #ifndef _MSC_VER
-	fprintf(stdout, "%s: %s %s=%d exited\n", __FUNCTION__, argv[0]
+	hp_log(stdout, "%s: %s %s=%d exited\n", __FUNCTION__, argv[0]
 		, (is_master ? "master" : "worker"), getpid());
 #endif /* _MSC_VER */
 	return 0;
