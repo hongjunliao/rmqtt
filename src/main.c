@@ -186,8 +186,8 @@ static int inih_handler(void* user, const char* section, const char* name,
 		 * NOTE:
 		 * set mysql=
 		 * will clear existing values */
-		dictAdd(cfg, sdsnew("mqtt.bind"), sdsnew(mqtt_bind));
-		dictAdd(cfg, sdsnew("mqtt.port"), sdsfromlonglong(mqtt_port));
+		dictReplace(cfg, sdsnew("mqtt.bind"), sdsnew(mqtt_bind));
+		dictReplace(cfg, sdsnew("mqtt.port"), sdsfromlonglong(mqtt_port));
 	}
 	else if(strcmp(name, "redis") == 0){
 
@@ -204,8 +204,8 @@ static int inih_handler(void* user, const char* section, const char* name,
 			}
 		}
 
-		dictAdd(cfg, sdsnew("redis_ip"), sdsnew(redis_ip));
-		dictAdd(cfg, sdsnew("redis_port"), sdsfromlonglong(redis_port));
+		dictReplace(cfg, sdsnew("redis_ip"), sdsnew(redis_ip));
+		dictReplace(cfg, sdsnew("redis_port"), sdsfromlonglong(redis_port));
 	}
 #ifndef _MSC_VER
 	else if (strcmp(name, "workers") == 0)
@@ -215,7 +215,7 @@ static int inih_handler(void* user, const char* section, const char* name,
 		hp_log_level = atoi(value);
 	}
 	
-	dictAdd(cfg, sdsnew(name), sdsnew(value));
+	dictReplace(cfg, sdsnew(name), sdsnew(value));
 
 	return 1;
 }
@@ -381,7 +381,7 @@ int main(int argc, char ** argv)
 		char const * arg = optarg? optarg : "";
 		switch (c) {
 		case 0:{
-			if     (option_index == 0) dictAdd(config, sdsnew("test"), sdsnew(arg));
+			if     (option_index == 0) dictReplace(config, sdsnew("test"), sdsnew(arg));
 			break;
 		}
 		case 'f':
