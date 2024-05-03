@@ -71,12 +71,6 @@ int rmqtt_io_uninit(rmqtt_io_ctx * ioctx);
 int rmqtt_io_send_header(rmqtt_io_t * client, uint8_t cmd,
         uint8_t flags, size_t len);
 
-///////////////////////////////////////////////////////////////////////////////////////
-
-/* Keys hashing / comparison functions for dict.c hash tables. */
-uint64_t r_dictSdsHash(const void *key);
-int r_dictSdsKeyCompare(dict *d, const void *key1, const void *key2);
-void r_dictSdsDestructor(dict *d, void *key);
 /////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef NDEBUG

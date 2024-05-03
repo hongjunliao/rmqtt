@@ -29,7 +29,7 @@
 #include <hiredis/adapters/libuv.h>
 
 #include "c-vector/cvector.h"	/**/
-#include "inih/ini.h"
+#include "hp/hp_config.h"  /* hp_ini */
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
 #include "hp/hp_io_t.h"
@@ -38,7 +38,7 @@
 #include "hp/hp_sig.h"
 #include "hp/hp_expire.h"  /* hp_expire */
 #include "hp/hp_redis.h"	/* hp_redis_init */
-#include "hp/hp_config.h"	/* hp_config_t */
+#include "hp/hp_config.h"	/* hp_ini */
 #include "hp/hp_test.h"    /* hp_test */
 #include "mongoose/mongoose.h"
 #include "rmqtt_io_t.h"
@@ -73,24 +73,6 @@ struct mg_timer t1obj, t2obj, *t1 = &t1obj, *t2 = &t2obj;
 /* global for Redis */
 redisAsyncContext * g_redis = 0;
 
-/* config table. char * => char * */
-static dictType configTableDictType = {
-	r_dictSdsHash,            /* hash function */
-    NULL,                   /* key dup */
-    NULL,                   /* val dup */
-	r_dictSdsKeyCompare,      /* key compare */
-    r_dictSdsDestructor,      /* key destructor */
-	r_dictSdsDestructor       /* val destructor */
-};
-static dict * config = 0;
-#define cfgi(key) atoi(cfg(key))
-static char const * cfg(char const * id) {
-	sds key = sdsnew(id);
-	void * v = dictFetchValue(config, key);
-	sdsfree(key);
-	return v? (char *)v : "";
-}
-hp_config_t g_rmqtt_conf = cfg;
 static int s_quit = 0;
 
 /* the default configure file */
@@ -121,55 +103,13 @@ extern int mg_init(struct mg_mgr * mgr, struct mg_timer * t1, struct mg_timer * 
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-static redisAsyncContext * redis_get()
-{
-	assert(s_ev);
-	redisAsyncContext * c = 0;
-	int rc = hp_redis_init(&c, s_ev, cfg("redis"), cfg("redis.password"), 0);
-	return (rc == 0? c : 0);
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-/*====================== Hash table type implementation  ==================== */
-int r_dictSdsKeyCompare(dict *d, const void *key1, const void *key2)
-{
-    int l1,l2;
-//    DICT_NOTUSED(privdata);
-
-    l1 = sdslen((sds)key1);
-    l2 = sdslen((sds)key2);
-    if (l1 != l2) return 0;
-    return memcmp(key1, key2, l1) == 0;
-}
-
-/* A case insensitive version used for the command lookup table and other
- * places where case insensitive non binary-safe comparison is needed. */
-static int dictSdsKeyCaseCompare(void *privdata, const void *key1,
-        const void *key2)
-{
-//    DICT_NOTUSED(privdata);
-
-    return strcasecmp(key1, key2) == 0;
-}
-
-void r_dictSdsDestructor(dict *d, void *key)
-{
-//    DICT_NOTUSED(privdata);
-
-    sdsfree(key);
-}
-
-uint64_t r_dictSdsHash(const void *key) {
-    return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
 static int inih_handler(void* user, const char* section, const char* name,
                    const char* value)
 {
-	dict* cfg = (dict*)user;
-	assert(cfg);
+	assert(user);
+	hp_ini * ini = (hp_ini*)user;
+	dict* d = ini->dict;
+	assert(d);
 
 	if(strcmp(name, "mqtt.addr") == 0){
 		/* mqtt.addr=0.0.0.0:7006 */
@@ -186,8 +126,8 @@ static int inih_handler(void* user, const char* section, const char* name,
 		 * NOTE:
 		 * set mysql=
 		 * will clear existing values */
-		dictReplace(cfg, sdsnew("mqtt.bind"), sdsnew(mqtt_bind));
-		dictReplace(cfg, sdsnew("mqtt.port"), sdsfromlonglong(mqtt_port));
+		dictReplace(d, sdsnew("mqtt.bind"), sdsnew(mqtt_bind));
+		dictReplace(d, sdsnew("mqtt.port"), sdsfromlonglong(mqtt_port));
 	}
 	else if(strcmp(name, "redis") == 0){
 
@@ -204,8 +144,8 @@ static int inih_handler(void* user, const char* section, const char* name,
 			}
 		}
 
-		dictReplace(cfg, sdsnew("redis_ip"), sdsnew(redis_ip));
-		dictReplace(cfg, sdsnew("redis_port"), sdsfromlonglong(redis_port));
+		dictReplace(d, sdsnew("redis_ip"), sdsnew(redis_ip));
+		dictReplace(d, sdsnew("redis_port"), sdsfromlonglong(redis_port));
 	}
 #ifndef _MSC_VER
 	else if (strcmp(name, "workers") == 0)
@@ -215,9 +155,24 @@ static int inih_handler(void* user, const char* section, const char* name,
 		hp_log_level = atoi(value);
 	}
 	
-	dictReplace(cfg, sdsnew(name), sdsnew(value));
+	dictReplace(d, sdsnew(name), sdsnew(value));
 
 	return 1;
+}
+
+static hp_ini definiobj = {.parser = inih_handler};
+hp_ini * defini = &definiobj;
+#define cfg(k) hp_config_ini(defini, (k))
+#define cfgi(k) atoi(cfg(k))
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+static redisAsyncContext * redis_get()
+{
+	assert(s_ev);
+	redisAsyncContext * c = 0;
+	int rc = hp_redis_init(&c, s_ev, cfg("redis"), cfg("redis.password"), 0);
+	return (rc == 0? c : 0);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -358,15 +313,10 @@ int main(int argc, char ** argv)
 
 #endif /* LIBHP_WITH_ZLOG */
 	/* config */
-	config = dictCreate(&configTableDictType);
 
-	if(access(conf, F_OK) == 0) {
-		if (ini_parse(conf, inih_handler, config) < 0) {
-			hp_log(stderr, "%s: ini_parse '%s' \n", __FUNCTION__, conf);
-			return -3;
-		}
-	}
+	cfg("#load " RMQTT_CONF); //load default configure
     /* parse argc/argv */
+	sds opt_test = sdsempty();
 	int c;
 	while (1) {
 		int option_index = 0;
@@ -381,24 +331,21 @@ int main(int argc, char ** argv)
 		char const * arg = optarg? optarg : "";
 		switch (c) {
 		case 0:{
-			if     (option_index == 0) dictReplace(config, sdsnew("test"), sdsnew(arg));
+			if     (option_index == 0) opt_test = sdscat(opt_test, arg);
 			break;
 		}
 		case 'f':
 			if (strlen(arg) > 0){
-				if(ini_parse(arg, inih_handler, config) < 0) {
+				sds inik = sdscatprintf(sdsempty(), "#load %s", arg);
+				if(cfgi(inik) != 0) {
 					hp_log(stderr, "%s: ini_parse '%s' \n", __FUNCTION__, arg);
 					return -3;
 				}
+				sdsfree(inik);
 			}
 			break;
 		case 's':{
-			dictIterator * iter = dictGetIterator(config);
-			dictEntry * ent;
-			for(ent = 0; (ent = dictNext(iter));){
-				printf("'%s'=>'%s'\n", (char *)dictGetKey(ent), (char *)dictGetVal(ent));
-			}
-			dictReleaseIterator(iter);
+			cfg("#show");
 			return 0;
 		}
 			break;
@@ -425,7 +372,7 @@ int main(int argc, char ** argv)
 	//test_hp_fs_main(argc, argv);
 	// test_redis_pub_main(argc, argv);
 //	test_hp_io_t_main(argc, argv);
-	test_hp_ssl_main(argc, argv);
+//	test_hp_ssl_main(argc, argv);
 #endif
 	/* init HTTP for master */
 	if (mg_init(mgr, t1, t2) != 0) { return -4; }
@@ -440,10 +387,8 @@ int main(int argc, char ** argv)
 	if (!hp_sock_is_valid(s_listenfd)) { return -2; }
 #ifdef _MSC_VER
 	hp_ioopt opt = {
-#ifdef _MSC_VER
 		.wm_user = 900, /* WM_USER + N */
 		.hwnd = 0		/* hwnd */
-#endif /* _MSC_VER */
 	};
 
 	rc = hp_io_init(s_ioctx, opt);
@@ -461,7 +406,7 @@ int main(int argc, char ** argv)
 #endif /* _MSC_VER */
 
 #ifndef NDEBUG
-	if(strstr(cfg("test"), ".libhp"))
+	if(strstr(opt_test, ".libhp"))
 		assert(libhp_all_tests_main(argc, argv) == 0);
 #endif //NDEBUG
 	hp_log(stdout, "%s: listening on port=%d, waiting for connection ...\n", __FUNCTION__
@@ -499,7 +444,8 @@ int main(int argc, char ** argv)
 	hp_redis_uninit(g_redis);
 	rev_close(s_ev);
 
-	dictRelease(config);
+	cfg("#unload");
+	sdsfree(opt_test);
 	sdsfree(conf);
 	sdsfree(zconf);
 

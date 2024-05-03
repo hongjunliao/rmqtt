@@ -25,16 +25,42 @@
 #include "hp/hp_log.h"
 #include "hp/hp_epoll.h"   /* hp_epoll */
 #include "hp/hp_net.h"     /* hp_net_connect */
-#include "hp/hp_config.h"	/* hp_config_t */
+#include "hp/hp_config.h"	/* hp_ini */
 #include "hp/str_dump.h"
 #include "protocol.h"
 #include "redis_pub.h"
 
-extern hp_config_t g_rmqtt_conf;
+extern hp_ini * defini;
+#define cfg(k) hp_config_ini(defini, (k))
+#define cfgi(k) atoi(cfg(k))
 
 extern size_t rmqtt_parse(char const * buf, size_t * nbuf
 		, void ** iohdrp, void ** bodyp);
 extern int rmqtt_dispatch(rmqtt_io_t * io, void * iohdr, void * body);
+/////////////////////////////////////////////////////////////////////////////////////////
+/*====================== Hash table type implementation  ==================== */
+static int r_dictSdsKeyCompare(dict *d, const void *key1, const void *key2)
+{
+    int l1,l2;
+//    DICT_NOTUSED(privdata);
+
+    l1 = sdslen((sds)key1);
+    l2 = sdslen((sds)key2);
+    if (l1 != l2) return 0;
+    return memcmp(key1, key2, l1) == 0;
+}
+
+static void r_dictSdsDestructor(dict *d, void *key)
+{
+//    DICT_NOTUSED(privdata);
+
+    sdsfree(key);
+}
+
+static uint64_t r_dictSdsHash(const void *key) {
+    return dictGenHashFunction((unsigned char*)key, sdslen((char*)key));
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 /**
@@ -114,7 +140,7 @@ static void rmqtt_io_t_uninit(rmqtt_io_t * io)
 	int rc;
 	rmqtt_io_ctx * rctx = io->rctx;
 
-	sds key = sdscatprintf(sdsempty(), "%s:online", g_rmqtt_conf("redis.topic"));
+	sds key = sdscatprintf(sdsempty(), "%s:online", cfg("redis.topic"));
 	redisAsyncCommand(rctx->c, 0, 0/* privdata */, "SREM %s %s", key, io->sid);
 	sdsfree(key);
 
