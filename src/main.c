@@ -31,7 +31,7 @@
 #include "c-vector/cvector.h"	/**/
 #include "hp/hp_ini.h"  /* hp_ini */
 #include "hp/str_dump.h"   /* dumpstr */
-#include "hp/string_util.h"
+#include "hp/hp_str.h"
 #include "hp/hp_io_t.h"
 #include "hp/hp_log.h"
 #include "hp/hp_net.h"

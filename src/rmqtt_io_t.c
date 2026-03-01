@@ -411,7 +411,7 @@ int rmqtt_io_uninit(rmqtt_io_ctx * ioctx)
 /* tests */
 #ifndef NDEBUG
 #include "hp/sdsinc.h"    /* sds */
-#include "hp/string_util.h"
+#include "hp/hp_str.h"
 
 int test_libim_mqtt_main(int argc, char ** argv)
 {

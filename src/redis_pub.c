@@ -35,7 +35,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hp/sdsinc.h"
-#include "hp/string_util.h" /* hp_vercmp */
+#include "hp/hp_str.h" /* hp_vercmp */
 //#include "uuid/uuid.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_pub.h"
@@ -318,7 +318,7 @@ char const * redis_cli_topic(char const * topic)
 #ifndef NDEBUG
 #include <uv.h>
 #include "hp/hp_cjson.h"
-#include "hp/string_util.h"
+#include "hp/hp_str.h"
 #include "hp/hp_redis.h"
 #include "hp/hp_ini.h"
 
