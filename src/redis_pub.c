@@ -39,7 +39,7 @@
 //#include "uuid/uuid.h"
 #include "c-vector/cvector.h"
 #include "hp/hp_pub.h"
-#include "hp/hp_config.h"	/* hp_ini */
+#include "hp/hp_ini.h"	/* hp_ini */
 #include "hp/hp_log.h"
 #include "redis_pub.h"
 #include "redis/src/version.h" /*REDIS_VERSION*/
@@ -320,7 +320,7 @@ char const * redis_cli_topic(char const * topic)
 #include "hp/hp_cjson.h"
 #include "hp/string_util.h"
 #include "hp/hp_redis.h"
-#include "hp/hp_config.h"
+#include "hp/hp_ini.h"
 
 static redisAsyncContext * pubc = 0;
 static int done = 0;

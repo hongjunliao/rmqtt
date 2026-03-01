@@ -9,7 +9,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #include "mongoose/mongoose.h"
-#include "hp/hp_config.h"	/* hp_ini */
+#include "hp/hp_ini.h"	/* hp_ini */
 #include "hp/hp_pub.h"
 #include "hp/hp_cjson.h"
 #include "hp/hp_err.h"

@@ -29,7 +29,7 @@
 #include <hiredis/adapters/libuv.h>
 
 #include "c-vector/cvector.h"	/**/
-#include "hp/hp_config.h"  /* hp_ini */
+#include "hp/hp_ini.h"  /* hp_ini */
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"
 #include "hp/hp_io_t.h"
@@ -38,7 +38,7 @@
 #include "hp/hp_sig.h"
 #include "hp/hp_expire.h"  /* hp_expire */
 #include "hp/hp_redis.h"	/* hp_redis_init */
-#include "hp/hp_config.h"	/* hp_ini */
+#include "hp/hp_ini.h"	/* hp_ini */
 #include "hp/hp_test.h"    /* hp_test */
 #include "mongoose/mongoose.h"
 #include "rmqtt_io_t.h"

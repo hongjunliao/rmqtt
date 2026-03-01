@@ -8,7 +8,6 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include "deps/libhp/config.h"
 #define GIT_COMMIT_ID "${GIT_COMMIT_ID}"
 #define GIT_BRANCH "${GIT_BRANCH}"
 #define GIT_TAG "${GIT_TAG}"

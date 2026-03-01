@@ -26,7 +26,7 @@
 #include "hp/str_dump.h"   /* dumpstr */
 #include "hp/string_util.h"/* sdslen_null */
 #include "hp/hp_redis.h"/* hp_redis_uninit */
-#include "hp/hp_config.h"	/* hp_config_t */
+#include "hp/hp_ini.h"	/* hp_config_t */
 #include "hp/str_dump.h"
 #include "protocol.h"
 #include "rmqtt_io_t.h"	/* rmqtt_io_t */

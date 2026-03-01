@@ -25,7 +25,7 @@
 #include "hp/hp_log.h"
 #include "hp/hp_epoll.h"   /* hp_epoll */
 #include "hp/hp_net.h"     /* hp_net_connect */
-#include "hp/hp_config.h"	/* hp_ini */
+#include "hp/hp_ini.h"	/* hp_ini */
 #include "hp/str_dump.h"
 #include "protocol.h"
 #include "redis_pub.h"
