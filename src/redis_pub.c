@@ -45,7 +45,7 @@
 #include "redis/src/version.h" /*REDIS_VERSION*/
 
 extern hp_ini * defini;
-#define cfg(k) hp_config_ini(defini, (k))
+#define cfg(k) hp_ini_exec(defini, (k))
 #define cfgi(k) atoi(cfg(k))
 
 static uint8_t s_qoss[3] = {0, 1, 2};

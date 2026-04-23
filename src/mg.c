@@ -17,7 +17,7 @@
 
 extern redisAsyncContext * g_redis;
 extern hp_ini * defini;
-#define cfg(k) hp_config_ini(defini, (k))
+#define cfg(k) hp_ini_exec(defini, (k))
 #define cfgi(k) atoi(cfg(k))
 /////////////////////////////////////////////////////////////////////////////////////////
 

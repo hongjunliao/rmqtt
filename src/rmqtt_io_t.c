@@ -26,12 +26,12 @@
 #include "hp/hp_epoll.h"   /* hp_epoll */
 #include "hp/hp_net.h"     /* hp_net_connect */
 #include "hp/hp_ini.h"	/* hp_ini */
-#include "hp/str_dump.h"
+#include "hp/hp_str.h"
 #include "protocol.h"
 #include "redis_pub.h"
 
 extern hp_ini * defini;
-#define cfg(k) hp_config_ini(defini, (k))
+#define cfg(k) hp_ini_exec(defini, (k))
 #define cfgi(k) atoi(cfg(k))
 
 extern size_t rmqtt_parse(char const * buf, size_t * nbuf

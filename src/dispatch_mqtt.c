@@ -23,11 +23,11 @@
 #include "hp/hp_log.h"     /* hp_log */
 #include "hp/hp_stdlib.h"    /* hp_min */
 #include "hp/hp_pub.h"     /*  */
-#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/hp_str.h"   /* dumpstr */
 #include "hp/hp_str.h"/* sdslen_null */
 #include "hp/hp_redis.h"/* hp_redis_uninit */
 #include "hp/hp_ini.h"	/* hp_config_t */
-#include "hp/str_dump.h"
+#include "hp/hp_str.h"
 #include "protocol.h"
 #include "rmqtt_io_t.h"	/* rmqtt_io_t */
 #include "redis_pub.h"

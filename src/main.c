@@ -30,7 +30,7 @@
 
 #include "c-vector/cvector.h"	/**/
 #include "hp/hp_ini.h"  /* hp_ini */
-#include "hp/str_dump.h"   /* dumpstr */
+#include "hp/hp_str.h"   /* dumpstr */
 #include "hp/hp_str.h"
 #include "hp/hp_io_t.h"
 #include "hp/hp_log.h"
@@ -162,7 +162,7 @@ static int inih_handler(void* user, const char* section, const char* name,
 
 static hp_ini definiobj = {.parser = inih_handler};
 hp_ini * defini = &definiobj;
-#define cfg(k) hp_config_ini(defini, (k))
+#define cfg(k) hp_ini_exec(defini, (k))
 #define cfgi(k) atoi(cfg(k))
 
 /////////////////////////////////////////////////////////////////////////////////////////
