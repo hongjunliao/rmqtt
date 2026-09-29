@@ -5,9 +5,7 @@
 * libim from IM project
 * */
 
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "redis/src/adlist.h" /* list */
 #include <stdint.h>

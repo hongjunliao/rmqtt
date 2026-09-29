@@ -4,9 +4,7 @@
  *
  * HTTP using mongoose
  * */
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif /* HAVE_CONFIG_H */
 
 #include "mongoose/mongoose.h"
 #include "hp/hp_ini.h"	/* hp_ini */

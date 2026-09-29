@@ -8,6 +8,8 @@
 #ifndef RMQTT_IO_T_H
 #define RMQTT_IO_T_H
 
+#include "config.h"
+
 #include "redis/src/adlist.h" /* list */
 //#include "Win32_Interop.h"
 #include "redis/src/dict.h"	  /* dict */

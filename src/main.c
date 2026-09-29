@@ -3,9 +3,7 @@
  * @author hongjun.liao <docici@126.com>, @date 2020/1/9
  *
  * */
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif /* HAVE_CONFIG_H */
 
 //#include "Win32_Interop.h"
 #include "redis/src/adlist.h" /* list */

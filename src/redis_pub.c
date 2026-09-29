@@ -17,9 +17,7 @@
  * ${topic_prefix}:s:${client_id}
  *
  * */
-#ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif /* HAVE_CONFIG_H */
 
 //#include "Win32_Interop.h"
 #include "redis/src/adlist.h" /* list */
