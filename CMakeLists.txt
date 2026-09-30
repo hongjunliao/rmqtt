@@ -24,13 +24,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 ###########################################################################################
 # sources and deps
 
+# for libhp
+set(LIBHP_WITH_MQTT 1 CACHE INTERNAL "LIBHP_WITH_MQTT")
+set(LIBHP_WITH_HTTP 1 CACHE INTERNAL "LIBHP_WITH_HTTP")
+set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
+set(LIBHP_WITH_REDIS 1 CACHE INTERNAL "LIBHP_WITH_REDIS")
+
 if(WIN32)
 	# getopt
 	set(getopt_hdr .nullfilesrc.h)
 	set(getopt_lib "deps/getopt/*.c")
+	set(uv_lib uv_a)
 else()
 	set(getopt_hdr getopt.h)
 	set(getopt_lib c)
+	set(uv_lib uv)
 endif()
 
 set(g_withs 1 1 1 1)
@@ -41,16 +49,7 @@ set(g_libs libhp "src/*.c" "deps/mongoose/mongoose.c" ${getopt_lib})
 
 ###########################################################################################
 
-# for libhp
-set(LIBHP_WITH_MQTT 1 CACHE INTERNAL "LIBHP_WITH_MQTT")
-set(LIBHP_WITH_REDIS 1 CACHE INTERNAL "LIBHP_WITH_REDIS")
-set(LIBHP_WITH_CJSON 1 CACHE INTERNAL "LIBHP_WITH_CJSON")
-set(LIBHP_WITH_WSAPOLL 1 CACHE INTERNAL "LIBHP_WITH_WSAPOLL")
-
 hp_cmake_find_deps(SRCS RMQTT_WITH_NULL_ deps cmakes g_withs g_hdrs g_incs g_deps g_libs)
-if(MSVC)
-	file(GLOB SRCS ${SRCS} deps/libc/*.c)
-endif()
 
 #message("rmqtt: SRCS=${SRCS}")
 add_executable(rmqtt ${SRCS} )
@@ -59,18 +58,11 @@ add_executable(rmqtt ${SRCS} )
 foreach(dep IN LISTS g_deps  )
 	hp_log("rmqtt: dep='${dep}', ${dep}_INCLUDE_DIRS='${${dep}_INCLUDE_DIRS}', ${dep}_LIBRARIES='${${dep}_LIBRARIES}'")
 	target_include_directories(rmqtt PRIVATE ${${dep}_INCLUDE_DIRS} )
-	target_link_libraries(rmqtt ${${dep}_LIBRARIES} ) 
-endforeach() 
+	target_link_libraries(rmqtt ${${dep}_LIBRARIES} )
+endforeach()
 
-#target_include_directories(rmqtt PRIVATE "${PROJECT_BINARY_DIR}" src/ deps/libhp/include/ 
-#	deps/libhp/ deps/libhp/deps/ deps/)
-	
-#if(MSVC)
-#target_include_directories(rmqtt PRIVATE deps/libhp/include/win/)
-#endif()
-#if(LIBHP_WITH_WIN32_INTERROP)
-#target_include_directories(rmqtt PRIVATE deps/libhp/deps/redis/deps/)
-#endif()	
+#libhp depends
+target_include_directories(libhp PRIVATE ${http-parser_INCLUDE_DIRS} deps )
 
 target_compile_options(rmqtt PUBLIC
     -DHAVE_CONFIG_H -D_GNU_SOURCE -DCMAKE_EXPORT_COMPILE_COMMANDS
